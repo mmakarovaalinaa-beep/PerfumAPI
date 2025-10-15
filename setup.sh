@@ -1,6 +1,7 @@
 #!/bin/bash
 # Setup script for Perfume API
 # Run this after cloning the repository
+# If you are reading this have a nice day huhuhuh !!!
 
 set -e
 
