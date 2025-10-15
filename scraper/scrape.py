@@ -19,19 +19,40 @@ class FragranticaScraper:
     Respects rate limiting and handles errors gracefully.
     """
     
-    def __init__(self, delay: float = 5.0):
+    def __init__(self, delay: float = 17.0):
         """
         Initialize the scraper.
         
         Args:
-            delay: Minimum delay between requests in seconds (default 5.0)
+            delay: Minimum delay between requests in seconds (default 17.0)
         """
         self.delay = delay
-        self.max_retries = 5
-        self.retry_delay = 30  # Initial retry delay for 429 errors
+        self.max_retries = 2  # Only retry once (2 total attempts)
+        self.retry_delay = 30  # Fixed retry delay for 429 errors
+        self.request_count = 0  # Track requests for progressive slowdown
+        self.last_url = None  # Track last URL for referer
+        
+        # Diverse User-Agent strings to rotate through
+        self.user_agents = [
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 14.2; rv:121.0) Gecko/20100101 Firefox/121.0',
+            'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+            'Mozilla/5.0 (X11; Linux x86_64; rv:119.0) Gecko/20100101 Firefox/119.0',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0',
+            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        ]
+        
         self.session = requests.Session()
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.9',
             'Referer': 'https://www.fragrantica.com/',
@@ -57,22 +78,54 @@ class FragranticaScraper:
         """
         for attempt in range(self.max_retries):
             try:
+                # Rotate User-Agent to appear like different users
+                self.session.headers['User-Agent'] = random.choice(self.user_agents)
+                
+                # Update referer to previous page (simulate natural browsing)
+                if self.last_url:
+                    self.session.headers['Referer'] = self.last_url
+                else:
+                    self.session.headers['Referer'] = self.base_url
+                
                 print(f"📡 Fetching: {url}")
                 response = self.session.get(url, timeout=15)
                 
                 # Handle rate limiting (429 Too Many Requests)
                 if response.status_code == 429:
-                    retry_delay = self.retry_delay * (2 ** attempt)  # Exponential backoff
-                    print(f"⚠️  Rate limited (429). Waiting {retry_delay} seconds before retry {attempt + 1}/{self.max_retries}...")
-                    time.sleep(retry_delay)
-                    continue
+                    if attempt < self.max_retries - 1:
+                        print(f"⚠️  Rate limited (429). Waiting {self.retry_delay} seconds before retry {attempt + 1}/{self.max_retries}...")
+                        time.sleep(self.retry_delay)
+                        continue
+                    else:
+                        print(f"⚠️  Rate limited (429). Max retries reached, moving on...")
+                        return None
                 
                 response.raise_for_status()
                 
-                # Add random delay to appear more human-like (delay ± 50%)
-                actual_delay = self.delay + random.uniform(-self.delay * 0.5, self.delay * 0.5)
-                actual_delay = max(2.0, actual_delay)  # Ensure minimum 2 seconds
-                print(f"⏳ Waiting {actual_delay:.1f} seconds...")
+                # Update last URL for next referer
+                self.last_url = url
+                
+                # Increment request counter
+                self.request_count += 1
+                
+                # Random long pause every 5-10 requests (simulate human reading)
+                if self.request_count % random.randint(5, 10) == 0:
+                    reading_pause = random.uniform(30, 90)
+                    print(f"📖 Taking a reading break for {reading_pause:.1f} seconds (simulating human behavior)...")
+                    time.sleep(reading_pause)
+                
+                # Progressive slowdown: add 2s delay every 20 requests
+                progressive_delay = (self.request_count // 20) * 2
+                
+                # Add random delay to appear more human-like (delay ± 30%)
+                base_delay = self.delay + progressive_delay
+                actual_delay = base_delay + random.uniform(-base_delay * 0.3, base_delay * 0.3)
+                actual_delay = max(10.0, actual_delay)  # Ensure minimum 10 seconds
+                
+                if progressive_delay > 0:
+                    print(f"⏳ Waiting {actual_delay:.1f} seconds (base: {base_delay}s due to {self.request_count} requests)...")
+                else:
+                    print(f"⏳ Waiting {actual_delay:.1f} seconds...")
                 time.sleep(actual_delay)
                 
                 # Use response.text to let requests handle encoding/decompression
@@ -93,6 +146,67 @@ class FragranticaScraper:
                 return None
         
         print(f"❌ Failed to fetch {url} after {self.max_retries} attempts")
+        return None
+    
+    def _extract_designer_id(self, brand_url: str) -> Optional[int]:
+        """
+        Extract designer ID from brand page HTML.
+        
+        Args:
+            brand_url: URL of the brand page
+            
+        Returns:
+            Designer ID as integer or None if not found
+        """
+        soup = self._get_page(brand_url)
+        if not soup:
+            return None
+        
+        # Method 1: Extract from og:image meta tag (most reliable)
+        # Pattern: <meta property="og:image" content="https://www.fragrantica.com/mdimg/dizajneri/o.720.jpg" />
+        og_image = soup.find('meta', property='og:image')
+        if og_image and og_image.get('content'):
+            content = og_image.get('content')
+            # Extract ID from pattern: o.{ID}.jpg
+            match = re.search(r'/o\.(\d+)\.jpg', content)
+            if match:
+                try:
+                    return int(match.group(1))
+                except (ValueError, TypeError):
+                    pass
+        
+        # Method 2: Check for data-designer-id attribute
+        designer_elem = soup.find(attrs={'data-designer-id': True})
+        if designer_elem:
+            try:
+                return int(designer_elem.get('data-designer-id'))
+            except (ValueError, TypeError):
+                pass
+        
+        # Method 3: Look in JavaScript/script tags for designerId or designer_id
+        scripts = soup.find_all('script')
+        for script in scripts:
+            script_text = script.string
+            if script_text:
+                # Pattern: designer_id = 123 or designerId: 123 or "designer_id":"123"
+                matches = re.findall(r'designer[_-]?id["\']?\s*[:=]\s*["\']?(\d+)', script_text, re.IGNORECASE)
+                if matches:
+                    try:
+                        return int(matches[0])
+                    except (ValueError, TypeError):
+                        pass
+        
+        # Method 4: Extract from URL patterns in page (e.g., AJAX calls)
+        # Look for links or data containing designer ID
+        all_text = soup.get_text()
+        matches = re.findall(r'designer_id[=:](\d+)', all_text)
+        if matches:
+            try:
+                return int(matches[0])
+            except (ValueError, TypeError):
+                pass
+        
+        print(f"⚠️  Could not extract designer ID from {brand_url}")
         return None
     
     def get_popular_perfumes_urls(self, limit: int = 1000) -> List[str]:
@@ -167,45 +281,81 @@ class FragranticaScraper:
     
     def get_brand_perfumes_urls(self, brand_name: str, limit: int = 100) -> List[str]:
         """
-        Get URLs of perfumes from a specific brand.
+        Get URLs of perfumes from a specific brand, sorted by popularity.
         
         Args:
             brand_name: Name of the brand (e.g., "Jean Paul Gaultier", "Xerjoff")
             limit: Maximum number of perfume URLs to retrieve
             
         Returns:
-            List of perfume URLs for the specified brand
+            List of perfume URLs for the specified brand, sorted by popularity
         """
         perfume_urls = []
-        page = 1
         
         # Format brand name for URL: replace spaces with hyphens, keep other characters
         # Examples: "Jean Paul Gaultier" -> "Jean-Paul-Gaultier"
         #           "Xerjoff" -> "Xerjoff"
         formatted_brand = brand_name.replace(' ', '-')
         
-        print(f"🔍 Searching for perfumes by {brand_name} (up to {limit})...")
+        print(f"🔍 Searching for popular perfumes by {brand_name} (up to {limit})...")
         
-        while len(perfume_urls) < limit:
-            # Fragrantica brand page URL pattern: /designers/{Brand}.html
-            # Pagination: appends #page{N} for pages 2+
-            if page == 1:
-                brand_url = f"{self.base_url}/designers/{formatted_brand}.html"
-            else:
-                brand_url = f"{self.base_url}/designers/{formatted_brand}.html#page{page}"
+        # First, get the designer ID from the brand page
+        brand_url = f"{self.base_url}/designers/{formatted_brand}.html"
+        designer_id = self._extract_designer_id(brand_url)
+        
+        if not designer_id:
+            print(f"❌ Could not find designer ID for {brand_name}")
+            return []
+        
+        print(f"✓ Found designer ID: {designer_id}")
+        
+        # Use AJAX endpoint to get perfumes sorted by popularity
+        ajax_url = f"{self.base_url}/ajax.php?designerSimpleList"
+        
+        # Rotate User-Agent for AJAX request
+        self.session.headers['User-Agent'] = random.choice(self.user_agents)
+        
+        # Update referer to brand page (simulate clicking from that page)
+        self.session.headers['Referer'] = brand_url
+        
+        try:
+            print(f"📡 Fetching popular perfumes via AJAX...")
             
-            soup = self._get_page(brand_url)
-            if not soup:
-                break
+            # POST request with form data
+            form_data = f"action=simple.perfume.list&designer_id={designer_id}&mode=popular"
+            
+            response = self.session.post(
+                ajax_url,
+                data=form_data,
+                headers={'Content-Type': 'application/x-www-form-urlencoded'},
+                timeout=15
+            )
+            
+            # Handle rate limiting
+            if response.status_code == 429:
+                print(f"⚠️  Rate limited (429). Waiting {self.retry_delay} seconds...")
+                time.sleep(self.retry_delay)
+                return []
+            
+            response.raise_for_status()
+            
+            # Update last URL for next referer
+            self.last_url = brand_url
+            
+            # Increment request counter
+            self.request_count += 1
+            
+            # Parse the HTML response
+            soup = BeautifulSoup(response.text, 'html.parser')
             
             # Find all perfume links with pattern /perfume/Brand/Name-ID.html
             perfume_links = soup.find_all('a', href=re.compile(r'/perfume/[^/]+/[^/]+\.html'))
             
             if not perfume_links:
-                print(f"⚠️  No more perfumes found on page {page}")
-                break
+                print(f"⚠️  No perfumes found in AJAX response")
+                return []
             
-            found_on_page = 0
+            # Extract perfume URLs
             for link in perfume_links:
                 perfume_url = link.get('href', '')
                 
@@ -220,25 +370,28 @@ class FragranticaScraper:
                 # Add if not already in list
                 if perfume_url not in perfume_urls:
                     perfume_urls.append(perfume_url)
-                    found_on_page += 1
                     print(f"  Found perfume {len(perfume_urls)}: {perfume_url}")
                     
                     if len(perfume_urls) >= limit:
                         break
             
-            # If no new perfumes found on this page, stop
-            if found_on_page == 0:
-                print(f"⚠️  No new perfumes found on page {page}")
-                break
+            # Add delay after AJAX request (same as _get_page logic)
+            progressive_delay = (self.request_count // 20) * 2
+            base_delay = self.delay + progressive_delay
+            actual_delay = base_delay + random.uniform(-base_delay * 0.3, base_delay * 0.3)
+            actual_delay = max(10.0, actual_delay)
             
-            page += 1
+            print(f"⏳ Waiting {actual_delay:.1f} seconds...")
+            time.sleep(actual_delay)
             
-            # Safety limit: don't scrape more than 50 pages
-            if page > 50:
-                print("⚠️  Reached page limit (50)")
-                break
+        except requests.exceptions.RequestException as e:
+            print(f"❌ Error fetching from AJAX endpoint: {str(e)}")
+            return []
+        except Exception as e:
+            print(f"❌ Unexpected error: {str(e)}")
+            return []
         
-        print(f"✅ Found {len(perfume_urls)} perfume URLs for {brand_name}")
+        print(f"✅ Found {len(perfume_urls)} popular perfume URLs for {brand_name}")
         return perfume_urls[:limit]
     
     def extract_perfume_details(self, url: str) -> Optional[Dict[str, Any]]:
@@ -518,6 +671,8 @@ class FragranticaScraper:
         # Visit homepage first to establish session and get cookies
         print("🌐 Establishing session with Fragrantica...")
         try:
+            # Rotate User-Agent for initial session
+            self.session.headers['User-Agent'] = random.choice(self.user_agents)
             self.session.get(self.base_url, timeout=15)
             time.sleep(3)  # Brief pause after initial connection
         except Exception as e:
@@ -566,6 +721,8 @@ class FragranticaScraper:
         # Visit homepage first to establish session and get cookies
         print("🌐 Establishing session with Fragrantica...")
         try:
+            # Rotate User-Agent for initial session
+            self.session.headers['User-Agent'] = random.choice(self.user_agents)
             self.session.get(self.base_url, timeout=15)
             time.sleep(3)  # Brief pause after initial connection
         except Exception as e:
@@ -635,6 +792,50 @@ class FragranticaScraper:
         
         return all_perfumes
     
+    def scrape_perfume_by_url(self, perfume_url: str, save_to_file: bool = True) -> Optional[Dict[str, Any]]:
+        """
+        Scrape a specific perfume by its direct Fragrantica URL.
+        
+        Args:
+            perfume_url: Direct URL to a Fragrantica perfume page
+                        (e.g., "https://www.fragrantica.com/perfume/Xerjoff/White-On-White-Three-76333.html")
+            save_to_file: Whether to save result to data.json
+            
+        Returns:
+            Dictionary with perfume data or None if failed
+        """
+        # Validate URL
+        if not perfume_url or 'fragrantica.com/perfume/' not in perfume_url:
+            print(f"❌ Invalid Fragrantica perfume URL: {perfume_url}")
+            return None
+        
+        print(f"🚀 Scraping perfume from URL: {perfume_url}")
+        
+        # Visit homepage first to establish session and get cookies
+        print("🌐 Establishing session with Fragrantica...")
+        try:
+            # Rotate User-Agent for initial session
+            self.session.headers['User-Agent'] = random.choice(self.user_agents)
+            self.session.get(self.base_url, timeout=15)
+            time.sleep(3)  # Brief pause after initial connection
+        except Exception as e:
+            print(f"⚠️  Warning: Could not establish initial session: {e}")
+        
+        # Extract perfume details
+        perfume_data = self.extract_perfume_details(perfume_url)
+        
+        if not perfume_data or not perfume_data.get('name'):
+            print(f"❌ Failed to extract perfume data from {perfume_url}")
+            return None
+        
+        print(f"✅ Successfully scraped: {perfume_data.get('name', 'Unknown')} by {perfume_data.get('brand', 'Unknown')}")
+        
+        # Save to file
+        if save_to_file and perfume_data:
+            self.save_to_json([perfume_data])
+        
+        return perfume_data
+    
     def save_to_json(self, perfumes: List[Dict[str, Any]], filename: str = "data/data.json"):
         """
         Save perfume data to JSON file.
@@ -665,8 +866,8 @@ def scrape_fragrantica(limit: int = 2) -> List[Dict[str, Any]]:
     Returns:
         List of perfume dictionaries
     """
-    # Use longer delay for reliability (5-10 seconds between requests)
-    scraper = FragranticaScraper(delay=7.0)
+    # Use longer delay for reliability (17 seconds base + randomization + progressive slowdown)
+    scraper = FragranticaScraper(delay=17.0)
     return scraper.scrape_perfumes(limit=limit, save_to_file=True)
 
 
@@ -681,7 +882,7 @@ def scrape_fragrantica_by_brand(brand_name: str, limit: int = 100) -> List[Dict[
     Returns:
         List of perfume dictionaries
     """
-    scraper = FragranticaScraper(delay=7.0)
+    scraper = FragranticaScraper(delay=17.0)
     return scraper.scrape_by_brand(brand_name, limit=limit, save_to_file=True)
 
 
@@ -696,8 +897,23 @@ def scrape_fragrantica_brands(brands: List[str], limit_per_brand: int = 100) -> 
     Returns:
         Combined list of perfume dictionaries from all brands
     """
-    scraper = FragranticaScraper(delay=7.0)
+    scraper = FragranticaScraper(delay=17.0)
     return scraper.scrape_multiple_brands(brands, limit_per_brand=limit_per_brand, save_to_file=True)
+
+
+def scrape_fragrantica_by_url(perfume_url: str) -> Optional[Dict[str, Any]]:
+    """
+    Convenience function to scrape a specific perfume by its URL.
+    
+    Args:
+        perfume_url: Direct URL to a Fragrantica perfume page
+                    (e.g., "https://www.fragrantica.com/perfume/Xerjoff/White-On-White-Three-76333.html")
+        
+    Returns:
+        Dictionary with perfume data or None if failed
+    """
+    scraper = FragranticaScraper(delay=17.0)
+    return scraper.scrape_perfume_by_url(perfume_url, save_to_file=True)
 
 
 if __name__ == "__main__":

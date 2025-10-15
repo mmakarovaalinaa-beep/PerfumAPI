@@ -29,6 +29,11 @@ env/
 ENV/
 .venv
 
+# Postman
+Perfume_API.postman_collection.json
+Perfume_API.postman_environment.json
+
+
 # IDE
 .vscode/
 .idea/

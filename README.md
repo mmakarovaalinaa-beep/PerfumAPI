@@ -8,6 +8,7 @@ A complete FastAPI application that scrapes perfume data from Fragrantica, store
   - General popular perfumes scraping
   - Brand-specific scraping (e.g., Jean Paul Gaultier, Xerjoff, Creed)
   - Multi-brand batch scraping
+  - Direct URL scraping (fastest - single perfume)
 - **Supabase Integration**: PostgreSQL database with auto-migration
 - **Authentication**: Supabase JWT-based auth for protected endpoints
 - **FastAPI Backend**: Fast, modern REST API with automatic documentation
@@ -286,6 +287,31 @@ curl -X POST http://localhost:9000/scrape/brands \
 -d '{"brands": ["Jean Paul Gaultier", "Xerjoff", "Creed"], "limit_per_brand": 10}'
 ```
 
+#### Scrape by URL
+Scrape a specific perfume by its direct Fragrantica URL:
+```bash
+POST /scrape/url
+Content-Type: application/json
+
+{
+  "perfume_url": "https://www.fragrantica.com/perfume/Xerjoff/White-On-White-Three-76333.html"
+}
+```
+
+Example with curl:
+```bash
+curl -X POST http://localhost:9000/scrape/url \
+-H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+-H "Content-Type: application/json" \
+-d '{"perfume_url": "https://www.fragrantica.com/perfume/Xerjoff/White-On-White-Three-76333.html"}'
+```
+
+**Benefits:**
+- Fastest scraping method (only 1 request)
+- Get data for a specific perfume you already know
+- No need to search through lists or brands
+- Perfect for updating existing perfume data
+
 #### Create Perfume Manually
 ```bash
 POST /perfumes
@@ -301,63 +327,7 @@ Content-Type: application/json
   "notes_base": ["Cedar", "Sandalwood", "Amber"]
 }
 ```
-
-## 🌐 Deploy to Render.com (Free)
-
-### Prerequisites
-- GitHub account
-- Render.com account (free)
-- Your code pushed to GitHub
-
-### Deployment Steps
-
-1. **Push to GitHub**
-   ```bash
-   git init
-   git add .
-   git commit -m "Initial commit"
-   git remote add origin <your-github-repo-url>
-   git push -u origin main
-   ```
-
-2. **Create Render Web Service**
-   - Go to [render.com](https://render.com)
-   - Click **New** → **Web Service**
-   - Connect your GitHub repository
-   - Configure:
-     - **Name**: perfume-api (or your choice)
-     - **Environment**: Python 3
-     - **Build Command**: `pip install -r requirements.txt`
-     - **Start Command**: `uvicorn api.main:app --host 0.0.0.0 --port 10000`
-     - **Plan**: Free
-
-3. **Add Environment Variables**
-   
-   In Render dashboard, go to **Environment** and add:
-   ```
-   SUPABASE_URL=https://xxxxxxxxxxxxx.supabase.co
-   SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-   SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-   ```
-
-4. **Deploy**
-   - Click **Create Web Service**
-   - Render will automatically deploy your app
-   - You'll get a URL like: `https://perfume-api.onrender.com`
-
-5. **Test Your Deployed API**
-   ```bash
-   curl https://perfume-api.onrender.com/health
-   ```
-
-### Important Notes for Render Free Tier
-
-- ⏰ **Spin Down**: Free services spin down after 15 minutes of inactivity
-- 🐌 **Cold Start**: First request after spin down may take 30-60 seconds
-- 💾 **No Persistent Disk**: Use Supabase for all data storage (not local files)
-- ⏱️ **750 Hours/Month**: Free tier includes 750 hours per month
-
-## 🧪 Testing the Scraper
+## Testing the Scraper
 
 ### Test with 2 Perfumes (Safe)
 ```bash
@@ -391,7 +361,7 @@ curl http://localhost:9000/stats
 curl http://localhost:9000/perfumes?limit=10
 ```
 
-## 📝 Usage Examples
+## Usage Examples
 
 ### JavaScript/Fetch
 ```javascript
@@ -430,7 +400,7 @@ scrape_response = requests.post(
 print(scrape_response.json())
 ```
 
-## ⚠️ Important Notes
+## Important Notes
 
 ### Ethical Scraping
 - This scraper is for **educational purposes only**
@@ -450,7 +420,7 @@ The scraper includes built-in delays to be respectful:
 - Respect copyright and intellectual property
 - Only use data for personal/educational projects
 
-## 🛠️ Troubleshooting
+## Troubleshooting
 
 ### "SUPABASE_URL and SUPABASE_KEY must be set"
 - Ensure `.env` file exists in project root
@@ -525,17 +495,6 @@ For issues:
 2. Review Supabase and Render documentation
 3. Check console/logs for error messages
 
-## 🎯 Next Steps
-
-After getting the basic setup working:
-
-1. ✅ Test locally with 2 perfumes
-2. ✅ Deploy to Render
-3. ✅ Set up Supabase authentication
-4. ✅ Test the deployed API
-5. 📱 Build a frontend (React, Vue, etc.)
-6. 🎨 Add more filtering and search features
-7. 📊 Add analytics and visualizations
 
 ---
 

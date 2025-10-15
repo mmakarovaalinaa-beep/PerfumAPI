@@ -27,7 +27,8 @@ from utils.auth import get_current_user, verify_admin
 from scraper.scrape import (
     scrape_fragrantica,
     scrape_fragrantica_by_brand,
-    scrape_fragrantica_brands
+    scrape_fragrantica_brands,
+    scrape_fragrantica_by_url
 )
 
 # Load environment variables
@@ -110,6 +111,11 @@ class ScrapeBrandsRequest(BaseModel):
     limit_per_brand: int = Field(default=10, ge=1, le=200, description="Number of perfumes to scrape per brand (1-200)")
 
 
+class ScrapeUrlRequest(BaseModel):
+    """Model for URL scrape request"""
+    perfume_url: str = Field(..., description="Direct URL to a Fragrantica perfume page (e.g., 'https://www.fragrantica.com/perfume/Xerjoff/White-On-White-Three-76333.html')")
+
+
 class ScrapeResponse(BaseModel):
     """Model for scrape response"""
     status: str
@@ -149,7 +155,8 @@ async def root():
             "perfumes": "/perfumes",
             "scrape": "/scrape (auth required)",
             "scrape_brand": "/scrape/brand (auth required)",
-            "scrape_brands": "/scrape/brands (auth required)"
+            "scrape_brands": "/scrape/brands (auth required)",
+            "scrape_url": "/scrape/url (auth required)"
         }
     }
 
@@ -431,6 +438,71 @@ async def scrape_multiple_brands(
         raise HTTPException(
             status_code=500,
             detail=f"Error during multi-brand scraping: {str(e)}"
+        )
+
+
+@app.post("/scrape/url", response_model=ScrapeResponse, tags=["Scraper (Auth Required)"])
+async def scrape_by_url(
+    scrape_request: ScrapeUrlRequest,
+    current_user: Dict[str, Any] = Depends(verify_admin)
+):
+    """
+    Scrape a specific perfume by its direct Fragrantica URL.
+    
+    **Requires authentication**: Include `Authorization: Bearer <token>` header.
+    
+    - **perfume_url**: Direct URL to a Fragrantica perfume page 
+      (e.g., "https://www.fragrantica.com/perfume/Xerjoff/White-On-White-Three-76333.html")
+    
+    This endpoint will:
+    1. Scrape perfume data from the specified URL
+    2. Save the data to data.json
+    3. Insert the data into Supabase database
+    
+    ⚠️ **Note**: This is the fastest scraping method as it only fetches one perfume page.
+    """
+    try:
+        perfume_url = scrape_request.perfume_url
+        
+        # Validate URL
+        if not perfume_url or 'fragrantica.com/perfume/' not in perfume_url:
+            return {
+                "status": "error",
+                "message": f"Invalid Fragrantica perfume URL: {perfume_url}",
+                "scraped_count": 0,
+                "inserted_count": 0,
+                "perfumes": []
+            }
+        
+        print(f"🔍 Starting URL scrape for '{perfume_url}' (requested by user {current_user.get('id', 'unknown')})")
+        
+        # Run the URL scraper
+        perfume = scrape_fragrantica_by_url(perfume_url)
+        
+        if not perfume:
+            return {
+                "status": "error",
+                "message": f"Failed to scrape perfume from URL: {perfume_url}",
+                "scraped_count": 0,
+                "inserted_count": 0,
+                "perfumes": []
+            }
+        
+        # Insert into database
+        inserted_count = await insert_perfumes_batch([perfume])
+        
+        return {
+            "status": "success",
+            "message": f"Successfully scraped '{perfume.get('name', 'Unknown')}' by {perfume.get('brand', 'Unknown')}",
+            "scraped_count": 1,
+            "inserted_count": inserted_count,
+            "perfumes": [perfume]  # Return the scraped perfume
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error during URL scraping: {str(e)}"
         )
 
 

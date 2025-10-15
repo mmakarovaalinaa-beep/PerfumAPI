@@ -800,9 +800,77 @@
 						"description": "Scrape 15 perfumes from each of 6 niche brands (90 total). Takes ~10-15 minutes. Requires authentication."
 					},
 					"response": []
+				},
+				{
+					"name": "Scrape by URL - Single Perfume",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"perfume_url\": \"https://www.fragrantica.com/perfume/Xerjoff/White-On-White-Three-76333.html\"\n}"
+						},
+						"url": {
+							"raw": "{{api_url}}/scrape/url",
+							"host": [
+								"{{api_url}}"
+							],
+							"path": [
+								"scrape",
+								"url"
+							]
+						},
+						"description": "Scrape a specific perfume by its direct Fragrantica URL. Fast - only 1 request. Example: Xerjoff White On White Three. Requires authentication."
+					},
+					"response": []
+				},
+				{
+					"name": "Scrape by URL - Dior Sauvage",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"perfume_url\": \"https://www.fragrantica.com/perfume/Dior/Sauvage-31861.html\"\n}"
+						},
+						"url": {
+							"raw": "{{api_url}}/scrape/url",
+							"host": [
+								"{{api_url}}"
+							],
+							"path": [
+								"scrape",
+								"url"
+							]
+						},
+						"description": "Scrape Dior Sauvage by its direct URL. Fastest way to get data for a specific perfume. Requires authentication."
+					},
+					"response": []
 				}
 			],
-			"description": "Scraping endpoints that require authentication. Includes general scraping and brand-specific scraping. Start with small limits for testing."
+			"description": "Scraping endpoints that require authentication. Includes general scraping, brand-specific scraping, and URL-based scraping. Start with small limits for testing."
 		}
 	],
 	"event": [
