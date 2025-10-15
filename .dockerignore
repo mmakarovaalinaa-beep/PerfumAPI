@@ -1,0 +1,21 @@
+# Docker ignore file (for future Docker support)
+.env
+.git
+.gitignore
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.venv
+venv/
+env/
+.vscode
+.idea
+*.md
+.DS_Store
+data/data.json
+migrations/
+test_api.py
+

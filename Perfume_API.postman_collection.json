@@ -1,0 +1,854 @@
+{
+	"info": {
+		"_postman_id": "perfume-api-collection",
+		"name": "Perfume API - Complete Collection",
+		"description": "Complete Postman collection for the Perfume API with Supabase authentication and all endpoints.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "🔐 Authentication",
+			"item": [
+				{
+					"name": "Sign Up User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const responseJson = pm.response.json();",
+									"    if (responseJson.access_token) {",
+									"        pm.environment.set('auth_token', responseJson.access_token);",
+									"        pm.environment.set('refresh_token', responseJson.refresh_token);",
+									"        console.log('✅ Auth token saved to environment');",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "apikey",
+								"value": "{{supabase_anon_key}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"admin@perfumeapi.com\",\n  \"password\": \"secure-password-123\"\n}"
+						},
+						"url": {
+							"raw": "{{supabase_url}}/auth/v1/signup",
+							"host": [
+								"{{supabase_url}}"
+							],
+							"path": [
+								"auth",
+								"v1",
+								"signup"
+							]
+						},
+						"description": "Create a new user account in Supabase. The auth token will be automatically saved to environment variables."
+					},
+					"response": []
+				},
+				{
+					"name": "Sign In User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const responseJson = pm.response.json();",
+									"    if (responseJson.access_token) {",
+									"        pm.environment.set('auth_token', responseJson.access_token);",
+									"        pm.environment.set('refresh_token', responseJson.refresh_token);",
+									"        console.log('✅ Auth token saved to environment');",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "apikey",
+								"value": "{{supabase_anon_key}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"admin@perfumeapi.com\",\n  \"password\": \"secure-password-123\"\n}"
+						},
+						"url": {
+							"raw": "{{supabase_url}}/auth/v1/token?grant_type=password",
+							"host": [
+								"{{supabase_url}}"
+							],
+							"path": [
+								"auth",
+								"v1",
+								"token"
+							],
+							"query": [
+								{
+									"key": "grant_type",
+									"value": "password"
+								}
+							]
+						},
+						"description": "Sign in with existing credentials. The auth token will be automatically saved to environment variables."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Current User",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "apikey",
+								"value": "{{supabase_anon_key}}",
+								"type": "text"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{supabase_url}}/auth/v1/user",
+							"host": [
+								"{{supabase_url}}"
+							],
+							"path": [
+								"auth",
+								"v1",
+								"user"
+							]
+						},
+						"description": "Get current user information using the auth token."
+					},
+					"response": []
+				},
+				{
+					"name": "Refresh Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const responseJson = pm.response.json();",
+									"    if (responseJson.access_token) {",
+									"        pm.environment.set('auth_token', responseJson.access_token);",
+									"        pm.environment.set('refresh_token', responseJson.refresh_token);",
+									"        console.log('✅ Auth token refreshed and saved');",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "apikey",
+								"value": "{{supabase_anon_key}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}"
+						},
+						"url": {
+							"raw": "{{supabase_url}}/auth/v1/token?grant_type=refresh_token",
+							"host": [
+								"{{supabase_url}}"
+							],
+							"path": [
+								"auth",
+								"v1",
+								"token"
+							],
+							"query": [
+								{
+									"key": "grant_type",
+									"value": "refresh_token"
+								}
+							]
+						},
+						"description": "Refresh the access token using the refresh token."
+					},
+					"response": []
+				}
+			],
+			"description": "Supabase authentication endpoints for user management."
+		},
+		{
+			"name": "🏥 Health & Info",
+			"item": [
+				{
+					"name": "API Root",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api_url}}/",
+							"host": [
+								"{{api_url}}"
+							],
+							"path": [
+								""
+							]
+						},
+						"description": "Get API information and available endpoints."
+					},
+					"response": []
+				},
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api_url}}/health",
+							"host": [
+								"{{api_url}}"
+							],
+							"path": [
+								"health"
+							]
+						},
+						"description": "Detailed health check with database connection status."
+					},
+					"response": []
+				},
+				{
+					"name": "Statistics",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api_url}}/stats",
+							"host": [
+								"{{api_url}}"
+							],
+							"path": [
+								"stats"
+							]
+						},
+						"description": "Get database statistics including total perfume count."
+					},
+					"response": []
+				}
+			],
+			"description": "Health check and information endpoints."
+		},
+		{
+			"name": "🌸 Perfumes (Public)",
+			"item": [
+				{
+					"name": "List All Perfumes",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api_url}}/perfumes?limit=20&offset=0",
+							"host": [
+								"{{api_url}}"
+							],
+							"path": [
+								"perfumes"
+							],
+							"query": [
+								{
+									"key": "limit",
+									"value": "20",
+									"description": "Number of perfumes to return (1-500)"
+								},
+								{
+									"key": "offset",
+									"value": "0",
+									"description": "Number of perfumes to skip"
+								}
+							]
+						},
+						"description": "Get paginated list of all perfumes. No authentication required."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Perfume by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api_url}}/perfumes/{{perfume_id}}",
+							"host": [
+								"{{api_url}}"
+							],
+							"path": [
+								"perfumes",
+								"{{perfume_id}}"
+							]
+						},
+						"description": "Get a specific perfume by its UUID. Replace {{perfume_id}} with actual UUID."
+					},
+					"response": []
+				},
+				{
+					"name": "Search Perfumes",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api_url}}/perfumes/search/chanel?limit=10",
+							"host": [
+								"{{api_url}}"
+							],
+							"path": [
+								"perfumes",
+								"search",
+								"chanel"
+							],
+							"query": [
+								{
+									"key": "limit",
+									"value": "10",
+									"description": "Maximum number of results (1-200)"
+								}
+							]
+						},
+						"description": "Search perfumes by name or brand. Replace 'chanel' with your search term."
+					},
+					"response": []
+				}
+			],
+			"description": "Public perfume endpoints that don't require authentication."
+		},
+		{
+			"name": "🔒 Perfumes (Protected)",
+			"item": [
+				{
+					"name": "Create Perfume",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Bleu de Chanel\",\n  \"brand\": \"Chanel\",\n  \"release_year\": 2010,\n  \"gender\": \"Men\",\n  \"notes_top\": [\"Lemon\", \"Mint\", \"Pink Pepper\"],\n  \"notes_middle\": [\"Ginger\", \"Jasmine\", \"Nutmeg\"],\n  \"notes_base\": [\"Cedar\", \"Sandalwood\", \"Amber\"],\n  \"rating\": 4.2,\n  \"votes\": 15234,\n  \"description\": \"An aromatic-woody fragrance for men that combines citrus freshness with warm woody base notes.\",\n  \"longevity\": \"Long Lasting\",\n  \"sillage\": \"Moderate\",\n  \"image_url\": \"https://example.com/bleu-de-chanel.jpg\",\n  \"perfume_url\": \"https://www.fragrantica.com/perfume/Chanel/Bleu-de-Chanel-9099.html\"\n}"
+						},
+						"url": {
+							"raw": "{{api_url}}/perfumes",
+							"host": [
+								"{{api_url}}"
+							],
+							"path": [
+								"perfumes"
+							]
+						},
+						"description": "Create a new perfume entry manually. Requires authentication."
+					},
+					"response": []
+				}
+			],
+			"description": "Protected perfume endpoints that require authentication."
+		},
+		{
+			"name": "🕷️ Scraper (Protected)",
+			"item": [
+				{
+					"name": "Scrape 2 Perfumes (Test)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"limit\": 2\n}"
+						},
+						"url": {
+							"raw": "{{api_url}}/scrape",
+							"host": [
+								"{{api_url}}"
+							],
+							"path": [
+								"scrape"
+							]
+						},
+						"description": "Scrape 2 perfumes from Fragrantica (safe for testing). Requires authentication."
+					},
+					"response": []
+				},
+				{
+					"name": "Scrape 10 Perfumes",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"limit\": 10\n}"
+						},
+						"url": {
+							"raw": "{{api_url}}/scrape",
+							"host": [
+								"{{api_url}}"
+							],
+							"path": [
+								"scrape"
+							]
+						},
+						"description": "Scrape 10 perfumes from Fragrantica. Takes ~20-30 seconds. Requires authentication."
+					},
+					"response": []
+				},
+				{
+					"name": "Scrape 50 Perfumes",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"limit\": 50\n}"
+						},
+						"url": {
+							"raw": "{{api_url}}/scrape",
+							"host": [
+								"{{api_url}}"
+							],
+							"path": [
+								"scrape"
+							]
+						},
+						"description": "Scrape 50 perfumes from Fragrantica. Takes ~2-3 minutes. Requires authentication."
+					},
+					"response": []
+				},
+				{
+					"name": "Scrape 100 Perfumes",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"limit\": 100\n}"
+						},
+						"url": {
+							"raw": "{{api_url}}/scrape",
+							"host": [
+								"{{api_url}}"
+							],
+							"path": [
+								"scrape"
+							]
+						},
+						"description": "Scrape 100 perfumes from Fragrantica. Takes ~3-5 minutes. Requires authentication."
+					},
+					"response": []
+				},
+				{
+					"name": "Scrape 1000 Perfumes (Full)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"limit\": 1000\n}"
+						},
+						"url": {
+							"raw": "{{api_url}}/scrape",
+							"host": [
+								"{{api_url}}"
+							],
+							"path": [
+								"scrape"
+							]
+						},
+						"description": "Scrape 1000 perfumes from Fragrantica (full dataset). Takes ~30-40 minutes. Requires authentication."
+					},
+					"response": []
+				},
+				{
+					"name": "Scrape by Brand - Jean Paul Gaultier",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"brand_name\": \"Jean Paul Gaultier\",\n  \"limit\": 10\n}"
+						},
+						"url": {
+							"raw": "{{api_url}}/scrape/brand",
+							"host": [
+								"{{api_url}}"
+							],
+							"path": [
+								"scrape",
+								"brand"
+							]
+						},
+						"description": "Scrape perfumes from Jean Paul Gaultier brand. Takes ~1-2 minutes for 10 perfumes. Requires authentication."
+					},
+					"response": []
+				},
+				{
+					"name": "Scrape by Brand - Xerjoff",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"brand_name\": \"Xerjoff\",\n  \"limit\": 20\n}"
+						},
+						"url": {
+							"raw": "{{api_url}}/scrape/brand",
+							"host": [
+								"{{api_url}}"
+							],
+							"path": [
+								"scrape",
+								"brand"
+							]
+						},
+						"description": "Scrape perfumes from Xerjoff brand. Takes ~2-3 minutes for 20 perfumes. Requires authentication."
+					},
+					"response": []
+				},
+				{
+					"name": "Scrape by Brand - Creed",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"brand_name\": \"Creed\",\n  \"limit\": 15\n}"
+						},
+						"url": {
+							"raw": "{{api_url}}/scrape/brand",
+							"host": [
+								"{{api_url}}"
+							],
+							"path": [
+								"scrape",
+								"brand"
+							]
+						},
+						"description": "Scrape perfumes from Creed brand. Takes ~1-2 minutes for 15 perfumes. Requires authentication."
+					},
+					"response": []
+				},
+				{
+					"name": "Scrape by Brand - Tom Ford",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"brand_name\": \"Tom Ford\",\n  \"limit\": 25\n}"
+						},
+						"url": {
+							"raw": "{{api_url}}/scrape/brand",
+							"host": [
+								"{{api_url}}"
+							],
+							"path": [
+								"scrape",
+								"brand"
+							]
+						},
+						"description": "Scrape perfumes from Tom Ford brand. Takes ~2-3 minutes for 25 perfumes. Requires authentication."
+					},
+					"response": []
+				},
+				{
+					"name": "Scrape Multiple Brands - Luxury (3 brands)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"brands\": [\"Jean Paul Gaultier\", \"Xerjoff\", \"Creed\"],\n  \"limit_per_brand\": 10\n}"
+						},
+						"url": {
+							"raw": "{{api_url}}/scrape/brands",
+							"host": [
+								"{{api_url}}"
+							],
+							"path": [
+								"scrape",
+								"brands"
+							]
+						},
+						"description": "Scrape 10 perfumes from each of 3 luxury brands (30 total). Takes ~3-5 minutes. Requires authentication."
+					},
+					"response": []
+				},
+				{
+					"name": "Scrape Multiple Brands - Designer (5 brands)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"brands\": [\"Dior\", \"Chanel\", \"Tom Ford\", \"Armani\", \"Versace\"],\n  \"limit_per_brand\": 20\n}"
+						},
+						"url": {
+							"raw": "{{api_url}}/scrape/brands",
+							"host": [
+								"{{api_url}}"
+							],
+							"path": [
+								"scrape",
+								"brands"
+							]
+						},
+						"description": "Scrape 20 perfumes from each of 5 designer brands (100 total). Takes ~8-12 minutes. Requires authentication."
+					},
+					"response": []
+				},
+				{
+					"name": "Scrape Multiple Brands - Niche Collection",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"brands\": [\"Xerjoff\", \"Roja Parfums\", \"Clive Christian\", \"Amouage\", \"Creed\", \"Parfums de Marly\"],\n  \"limit_per_brand\": 15\n}"
+						},
+						"url": {
+							"raw": "{{api_url}}/scrape/brands",
+							"host": [
+								"{{api_url}}"
+							],
+							"path": [
+								"scrape",
+								"brands"
+							]
+						},
+						"description": "Scrape 15 perfumes from each of 6 niche brands (90 total). Takes ~10-15 minutes. Requires authentication."
+					},
+					"response": []
+				}
+			],
+			"description": "Scraping endpoints that require authentication. Includes general scraping and brand-specific scraping. Start with small limits for testing."
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Auto-set API URL if not set",
+					"if (!pm.environment.get('api_url')) {",
+					"    pm.environment.set('api_url', 'http://localhost:9000');",
+					"}"
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "api_url",
+			"value": "http://localhost:9000",
+			"type": "string"
+		},
+		{
+			"key": "supabase_url",
+			"value": "https://your-project.supabase.co",
+			"type": "string"
+		},
+		{
+			"key": "supabase_anon_key",
+			"value": "your-anon-key-here",
+			"type": "string"
+		},
+		{
+			"key": "auth_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "refresh_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "perfume_id",
+			"value": "replace-with-actual-uuid",
+			"type": "string"
+		}
+	]
+}
