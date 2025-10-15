@@ -601,12 +601,37 @@ class FragranticaScraper:
                 except ValueError:
                     pass
             
-            # Extract description
-            desc_tag = soup.find('div', itemprop='description')
-            if not desc_tag:
-                desc_tag = soup.find('div', class_='text-description')
-            if desc_tag:
-                perfume_data['description'] = desc_tag.get_text(strip=True)[:1000]  # Limit length
+            # Extract description with proper formatting
+            desc_container = soup.find('div', itemprop='description')
+            if not desc_container:
+                desc_container = soup.find('div', class_='text-description')
+            
+            if desc_container:
+                description_parts = []
+                
+                # Extract main description (first <p> tag, excluding reviewstrigger)
+                first_p = desc_container.find('p', class_=lambda x: x != 'reviewstrigger')
+                if first_p:
+                    # Use separator=' ' to add spaces between bold/inline elements
+                    main_desc = first_p.get_text(separator=' ', strip=True)
+                    if main_desc:
+                        description_parts.append(main_desc)
+                
+                # Extract blockquote content if present
+                blockquote = desc_container.find('div', class_='fragrantica-blockquote')
+                if blockquote:
+                    # Get all <p> tags within blockquote
+                    blockquote_paragraphs = blockquote.find_all('p')
+                    for p in blockquote_paragraphs:
+                        p_text = p.get_text(separator=' ', strip=True)
+                        if p_text:
+                            description_parts.append(p_text)
+                
+                # Combine parts with double newline separator
+                if description_parts:
+                    full_description = '\n\n'.join(description_parts)
+                    # Limit total length to prevent extremely long descriptions
+                    perfume_data['description'] = full_description[:2000]
             
             # Extract longevity rating (0-10 scale)
             # Look for: <p style="color: #83a6c4;">Perfume longevity:<span>2.86</span> out of<span>5</span>.</p>

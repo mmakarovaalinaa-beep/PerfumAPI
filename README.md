@@ -12,7 +12,6 @@ A complete FastAPI application that scrapes perfume data from Fragrantica, store
 - **Supabase Integration**: PostgreSQL database with auto-migration
 - **Authentication**: Supabase JWT-based auth for protected endpoints
 - **FastAPI Backend**: Fast, modern REST API with automatic documentation
-- **Free Deployment**: Ready for Render.com free tier
 - **CORS Enabled**: Works with any frontend application
 
 ## Project Structure

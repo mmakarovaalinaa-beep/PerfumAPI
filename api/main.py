@@ -10,6 +10,7 @@ from typing import List, Optional, Dict, Any
 from dotenv import load_dotenv
 import os
 import sys
+import asyncio
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -288,8 +289,8 @@ async def scrape_perfumes(
         
         print(f"🔍 Starting scrape for {limit} perfumes (requested by user {current_user.get('id', 'unknown')})")
         
-        # Run the scraper
-        perfumes = scrape_fragrantica(limit=limit)
+        # Run the scraper in a thread to avoid blocking the event loop
+        perfumes = await asyncio.to_thread(scrape_fragrantica, limit=limit)
         
         if not perfumes:
             return {
@@ -344,8 +345,8 @@ async def scrape_brand(
         
         print(f"🔍 Starting brand scrape for '{brand_name}' with limit {limit} (requested by user {current_user.get('id', 'unknown')})")
         
-        # Run the brand scraper
-        perfumes = scrape_fragrantica_by_brand(brand_name, limit=limit)
+        # Run the brand scraper in a thread to avoid blocking the event loop
+        perfumes = await asyncio.to_thread(scrape_fragrantica_by_brand, brand_name, limit=limit)
         
         if not perfumes:
             return {
@@ -411,8 +412,8 @@ async def scrape_multiple_brands(
         print(f"🔍 Starting multi-brand scrape for {len(brands)} brands with {limit_per_brand} perfumes each (requested by user {current_user.get('id', 'unknown')})")
         print(f"📋 Brands: {', '.join(brands)}")
         
-        # Run the multi-brand scraper
-        perfumes = scrape_fragrantica_brands(brands, limit_per_brand=limit_per_brand)
+        # Run the multi-brand scraper in a thread to avoid blocking the event loop
+        perfumes = await asyncio.to_thread(scrape_fragrantica_brands, brands, limit_per_brand=limit_per_brand)
         
         if not perfumes:
             return {
@@ -476,8 +477,8 @@ async def scrape_by_url(
         
         print(f"🔍 Starting URL scrape for '{perfume_url}' (requested by user {current_user.get('id', 'unknown')})")
         
-        # Run the URL scraper
-        perfume = scrape_fragrantica_by_url(perfume_url)
+        # Run the URL scraper in a thread to avoid blocking the event loop
+        perfume = await asyncio.to_thread(scrape_fragrantica_by_url, perfume_url)
         
         if not perfume:
             return {
