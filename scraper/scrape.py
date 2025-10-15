@@ -465,42 +465,53 @@ class FragranticaScraper:
                 perfume_data['brand'] = brand_tag.get_text(strip=True)
             
             # Extract release year
-            year_info = soup.find('div', text=re.compile(r'^\d{4}$'))
-            if not year_info:
-                # Look in the main info section
+            # First priority: Search in description for launch patterns (most reliable)
+            desc_tag = soup.find('div', itemprop='description')
+            if not desc_tag:
+                desc_tag = soup.find('div', class_='text-description')
+            if desc_tag:
+                desc_text = desc_tag.get_text()
+                # Look for patterns like "launched in 2020", "released in 2020"
+                launch_patterns = [
+                    r'launched in (\d{4})',
+                    r'released in (\d{4})', 
+                    r'was launched in (\d{4})',
+                    r'was released in (\d{4})'
+                ]
+                for pattern in launch_patterns:
+                    match = re.search(pattern, desc_text, re.IGNORECASE)
+                    if match:
+                        year = int(match.group(1))
+                        if 1900 <= year <= 2030:  # Reasonable year range
+                            perfume_data['release_year'] = year
+                            break
+            
+            # Second priority: Look in the main info section
+            if not perfume_data['release_year']:
                 main_info = soup.find('div', class_='main-info')
                 if main_info:
                     year_match = re.search(r'\b(19|20)\d{2}\b', main_info.get_text())
                     if year_match:
-                        perfume_data['release_year'] = int(year_match.group())
-                
-                # If still not found, search in description for launch patterns
-                if not perfume_data['release_year']:
-                    desc_tag = soup.find('div', itemprop='description')
-                    if not desc_tag:
-                        desc_tag = soup.find('div', class_='text-description')
-                    if desc_tag:
-                        desc_text = desc_tag.get_text()
-                        # Look for patterns like "launched in 2022", "released in 2022", "was 2022"
-                        launch_patterns = [
-                            r'launched in (\d{4})',
-                            r'released in (\d{4})', 
-                            r'was launched in (\d{4})',
-                            r'was released in (\d{4})',
-                            r'\bwas (\d{4})\b'
-                        ]
-                        for pattern in launch_patterns:
-                            match = re.search(pattern, desc_text, re.IGNORECASE)
-                            if match:
-                                year = int(match.group(1))
-                                if 1900 <= year <= 2030:  # Reasonable year range
+                        year = int(year_match.group())
+                        if 1900 <= year <= 2030:
+                            perfume_data['release_year'] = year
+            
+            # Third priority: Look for standalone year div (but exclude vote-box divs)
+            if not perfume_data['release_year']:
+                # Find all divs with 4-digit text
+                all_divs = soup.find_all('div')
+                for div in all_divs:
+                    if div.string and re.match(r'^(19|20)\d{2}$', div.string.strip()):
+                        # Skip divs that are inside vote-box elements
+                        parent_classes = ' '.join(div.parent.get('class', [])) if div.parent else ''
+                        if 'vote-box' not in parent_classes.lower():
+                            try:
+                                year = int(div.string.strip())
+                                if 1900 <= year <= 2030:
                                     perfume_data['release_year'] = year
                                     break
-            else:
-                try:
-                    perfume_data['release_year'] = int(year_info.get_text(strip=True))
-                except ValueError:
-                    pass
+                            except ValueError:
+                                continue
             
             # Gender already extracted from h1 title above, fallback check if not found
             if not perfume_data['gender']:
