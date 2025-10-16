@@ -1,6 +1,6 @@
 # Perfume Data API
 
-A complete FastAPI application that scrapes perfume data from Fragrantica, stores it in Supabase (PostgreSQL), and serves it through a REST API. Designed for free hosting on Render.com. For testing and educational purposes. One love Fragrantica.com <3.
+A complete FastAPI application that scrapes perfume data from Fragrantica, stores it in Supabase (PostgreSQL), and serves it through a REST API. Currently being hosted here https://perfumapi-frontend.onrender.com/. For testing and educational purposes. One love Fragrantica.com <3.
 
 ## Features
 
@@ -305,12 +305,6 @@ curl -X POST http://localhost:9000/scrape/url \
 -d '{"perfume_url": "https://www.fragrantica.com/perfume/Xerjoff/White-On-White-Three-76333.html"}'
 ```
 
-**Benefits:**
-- Fastest scraping method (only 1 request)
-- Get data for a specific perfume you already know
-- No need to search through lists or brands
-- Perfect for updating existing perfume data
-
 #### Create Perfume Manually
 ```bash
 POST /perfumes
@@ -441,12 +435,8 @@ The scraper includes built-in delays to be respectful:
 - Reduce the limit and try again
 - Check console logs for specific errors
 
-### Render Deployment Issues
-- Verify all environment variables are set in Render dashboard
-- Check build logs for errors
-- Ensure `Procfile` and `requirements.txt` are in the repo root
 
-## 🔧 Development
+## Development
 
 ### Run Tests
 ```bash
@@ -470,7 +460,7 @@ Use Supabase dashboard:
 2. Select `perfumes` table
 3. View, edit, or delete records
 
-## 📚 Tech Stack
+## Tech Stack
 
 - **Backend**: FastAPI 0.104+
 - **Database**: Supabase (PostgreSQL)
@@ -479,15 +469,15 @@ Use Supabase dashboard:
 - **Hosting**: Render.com (free tier)
 - **Language**: Python 3.9+
 
-## 🤝 Contributing
+## Contributing
 
 This is an educational project. Feel free to fork and modify for your own learning!
 
-## 📄 License
+## License
 
 This project is for educational purposes. Please respect Fragrantica's terms of service and use responsibly.
 
-## 🆘 Support
+## Support
 
 For issues:
 1. Check the troubleshooting section above
