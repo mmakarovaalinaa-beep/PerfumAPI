@@ -1,6 +1,6 @@
 # Perfume Data API
 
-A complete FastAPI application that scrapes perfume data from Fragrantica, stores it in Supabase (PostgreSQL), and serves it through a REST API. Currently being hosted here https://perfumapi-frontend.onrender.com/. For testing and educational purposes. One love Fragrantica.com <3.
+A complete FastAPI application that scrapes perfume data from Fragrantica, stores it in Supabase (PostgreSQL), and serves it through a REST API. Currently being hosted here https://perfumapi-frontend.onrender.com/. For testing and educational purposes. One love Fragrantica.com <3. Made by the one and only SECCAZ.
 
 ## Features
 
