@@ -46,12 +46,12 @@ app = FastAPI(
 
 # Configure CORS
 # Allow frontend URL from environment variable
-frontend_url = os.getenv("FRONTEND_URL", "https://perfumapi-frontend.onrender.com/")
+frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
 allowed_origins = [
     frontend_url,
     "http://localhost:5173",  # Local development
     "http://localhost:3000", 
-    "https://perfumapi-frontend.onrender.com/" # Alternative local port
+    "https://perfumapi-frontend.onrender.com" # Alternative local port
 ]
 
 app.add_middleware(
