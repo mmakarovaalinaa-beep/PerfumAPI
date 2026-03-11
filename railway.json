@@ -9,19 +9,4 @@
     "restartPolicyType": "ON_FAILURE"
   }
 }
-```
-4. Click **Commit changes**
 
----
-
-Also check your **`requirements.txt`** file in the repo:
-
-1. Click on `requirements.txt`
-2. Make sure it includes at least these lines — if anything is missing, add it and commit:
-```
-fastapi
-uvicorn
-supabase
-python-dotenv
-requests
-beautifulsoup4
