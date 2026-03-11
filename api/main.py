@@ -24,7 +24,7 @@ from utils.db import (
     search_perfumes,
     get_perfume_count
 )
-from utils.auth import get_current_user, verify_admin
+from utils.auth 
 from scraper.scrape import (
     scrape_fragrantica,
     scrape_fragrantica_by_brand,
@@ -245,8 +245,8 @@ async def search_perfumes_endpoint(
 # Protected endpoints (authentication required)
 @app.post("/perfumes", response_model=PerfumeResponse, tags=["Perfumes (Auth Required)"])
 async def create_perfume(
-    perfume: PerfumeCreate,
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    perfume: PerfumeCreate
+    
 ):
     """
     Create a new perfume entry manually.
