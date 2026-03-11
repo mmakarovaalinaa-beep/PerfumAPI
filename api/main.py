@@ -344,25 +344,30 @@ async def sillage_fragrances(
     )
 
     if search:
-        # Search across name, brand, notes, and accords
-        q = q.or_(
-            f"name.ilike.%{search}%,"
-            f"brand.ilike.%{search}%,"
-            f"notes_top.ilike.%{search}%,"
-            f"notes_middle.ilike.%{search}%,"
-            f"notes_base.ilike.%{search}%,"
-            f"accords.ilike.%{search}%"
-        )
-    if gender:
-        q = q.eq("gender", gender.lower())
-    if brand:
-        q = q.ilike("brand", f"%{brand}%")
+        # Use RPC function to search across JSONB columns (notes, accords) via cast to text
+        rpc_result = sb.rpc("search_fragrances", {"search_term": search}).execute()
+        rows = rpc_result.data or []
 
-    q = q.order("rating", desc=True, nullsfirst=False)
-    q = q.range(offset, offset + limit - 1)
+        # Apply gender/brand filters in Python since we are post-RPC
+        if gender:
+            rows = [r for r in rows if (r.get("gender") or "").lower() == gender.lower()]
+        if brand:
+            rows = [r for r in rows if brand.lower() in (r.get("brand") or "").lower()]
 
-    result = q.execute()
-    rows   = result.data or []
+        # Sort by rating descending and apply pagination
+        rows.sort(key=lambda r: r.get("rating") or 0, reverse=True)
+        rows = rows[offset: offset + limit]
+    else:
+        if gender:
+            q = q.eq("gender", gender.lower())
+        if brand:
+            q = q.ilike("brand", f"%{brand}%")
+
+        q = q.order("rating", desc=True, nullsfirst=False)
+        q = q.range(offset, offset + limit - 1)
+
+        result = q.execute()
+        rows   = result.data or []
 
     # Parse JSON strings back to lists/dicts
     import json as _json
