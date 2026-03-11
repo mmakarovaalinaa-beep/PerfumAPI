@@ -312,6 +312,74 @@ async def get_stats():
         raise HTTPException(status_code=500, detail=f"Error fetching stats: {str(e)}")
 
 
+# ── FRAGELLA PROXY ──────────────────────────────────────────────────────────
+# Forwards requests to Fragella API server-side (avoids browser CORS restrictions)
+
+import httpx
+
+FRAGELLA_BASE = "https://api.fragella.com/api/v1"
+FRAGELLA_KEY  = os.getenv("FRAGELLA_KEY", "")
+
+
+@app.get("/fragella/fragrances", tags=["Fragella Proxy"])
+async def fragella_fragrances(
+    search: Optional[str] = Query(None),
+    gender: Optional[str] = Query(None),
+    limit:  int           = Query(100, ge=1, le=500),
+):
+    """Proxy: GET /api/v1/fragrances from Fragella."""
+    params = {"limit": limit}
+    if search: params["search"] = search
+    if gender: params["gender"] = gender
+    async with httpx.AsyncClient(timeout=20) as client:
+        r = await client.get(
+            f"{FRAGELLA_BASE}/fragrances",
+            params=params,
+            headers={"x-api-key": FRAGELLA_KEY},
+        )
+    if r.status_code != 200:
+        raise HTTPException(status_code=r.status_code, detail=r.text)
+    return r.json()
+
+
+@app.get("/fragella/fragrances/match", tags=["Fragella Proxy"])
+async def fragella_match(
+    accords: Optional[str] = Query(None),
+    top:     Optional[str] = Query(None),
+    limit:   int           = Query(20, ge=1, le=100),
+):
+    """Proxy: GET /api/v1/fragrances/match from Fragella."""
+    params = {"limit": limit}
+    if accords: params["accords"] = accords
+    if top:     params["top"] = top
+    async with httpx.AsyncClient(timeout=20) as client:
+        r = await client.get(
+            f"{FRAGELLA_BASE}/fragrances/match",
+            params=params,
+            headers={"x-api-key": FRAGELLA_KEY},
+        )
+    if r.status_code != 200:
+        raise HTTPException(status_code=r.status_code, detail=r.text)
+    return r.json()
+
+
+@app.get("/fragella/fragrances/similar", tags=["Fragella Proxy"])
+async def fragella_similar(
+    name:  str = Query(...),
+    limit: int = Query(6, ge=1, le=50),
+):
+    """Proxy: GET /api/v1/fragrances/similar from Fragella."""
+    async with httpx.AsyncClient(timeout=20) as client:
+        r = await client.get(
+            f"{FRAGELLA_BASE}/fragrances/similar",
+            params={"name": name, "limit": limit},
+            headers={"x-api-key": FRAGELLA_KEY},
+        )
+    if r.status_code != 200:
+        raise HTTPException(status_code=r.status_code, detail=r.text)
+    return r.json()
+
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", 9000))
