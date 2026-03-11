@@ -500,7 +500,7 @@ async def enrich_unknown_fragrance(name: str = Query(..., description="Fragrance
     When a fragrance isn't found in the DB, call Claude to generate
     structured data matching the existing fragrance schema.
     """
-    client = anthropic.Anthropic(api_key=os.getenv("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"))
+    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
     prompt = f"""You are a fragrance expert. Return ONLY a JSON object for the perfume "{name}".
 Use exactly this schema, no extra text:
