@@ -1,9 +1,9 @@
 """
 FastAPI application for Perfume Data API.
-Serves scraped perfume data from Supabase with authentication.
+Serves scraped perfume data from Supabase.
 """
 
-from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
@@ -24,7 +24,6 @@ from utils.db import (
     search_perfumes,
     get_perfume_count
 )
-from utils.auth 
 from scraper.scrape import (
     scrape_fragrantica,
     scrape_fragrantica_by_brand,
@@ -45,22 +44,12 @@ app = FastAPI(
 )
 
 # Configure CORS
-# Allow frontend URL from environment variable
-frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
-allowed_origins = [
-    frontend_url,
-    "http://localhost:5173",  # Local development
-    "http://localhost:3000", 
-    "https://perfumapi-frontend.onrender.com" # Alternative local port
-]
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-
 )
 
 
@@ -116,7 +105,7 @@ class ScrapeBrandsRequest(BaseModel):
 
 class ScrapeUrlRequest(BaseModel):
     """Model for URL scrape request"""
-    perfume_url: str = Field(..., description="Direct URL to a Fragrantica perfume page (e.g., 'https://www.fragrantica.com/perfume/Xerjoff/White-On-White-Three-76333.html')")
+    perfume_url: str = Field(..., description="Direct URL to a Fragrantica perfume page")
 
 
 class ScrapeResponse(BaseModel):
@@ -145,7 +134,7 @@ async def startup_event():
     print("✅ API ready!")
 
 
-# Health check endpoint
+# Health check endpoints
 @app.get("/", tags=["Health"])
 async def root():
     """Health check endpoint"""
@@ -156,10 +145,10 @@ async def root():
         "endpoints": {
             "docs": "/docs",
             "perfumes": "/perfumes",
-            "scrape": "/scrape (auth required)",
-            "scrape_brand": "/scrape/brand (auth required)",
-            "scrape_brands": "/scrape/brands (auth required)",
-            "scrape_url": "/scrape/url (auth required)"
+            "scrape": "/scrape",
+            "scrape_brand": "/scrape/brand",
+            "scrape_brands": "/scrape/brands",
+            "scrape_url": "/scrape/url"
         }
     }
 
@@ -178,22 +167,16 @@ async def health_check():
         raise HTTPException(status_code=503, detail=f"Service unhealthy: {str(e)}")
 
 
-# Public endpoints (no authentication required)
+# Public endpoints
 @app.get("/perfumes", response_model=PerfumeListResponse, tags=["Perfumes"])
 async def list_perfumes(
     limit: int = Query(default=100, ge=1, le=500, description="Number of perfumes to return"),
     offset: int = Query(default=0, ge=0, description="Number of perfumes to skip")
 ):
-    """
-    Get list of all perfumes with pagination.
-    
-    - **limit**: Maximum number of perfumes to return (1-500)
-    - **offset**: Number of perfumes to skip for pagination
-    """
+    """Get list of all perfumes with pagination."""
     try:
         perfumes = await get_all_perfumes(limit=limit, offset=offset)
         total = await get_perfume_count()
-        
         return {
             "total": total,
             "limit": limit,
@@ -206,17 +189,11 @@ async def list_perfumes(
 
 @app.get("/perfumes/{perfume_id}", response_model=PerfumeResponse, tags=["Perfumes"])
 async def get_perfume(perfume_id: str):
-    """
-    Get a specific perfume by ID.
-    
-    - **perfume_id**: UUID of the perfume
-    """
+    """Get a specific perfume by ID."""
     try:
         perfume = await get_perfume_by_id(perfume_id)
-        
         if not perfume:
             raise HTTPException(status_code=404, detail=f"Perfume with ID {perfume_id} not found")
-        
         return perfume
     except HTTPException:
         raise
@@ -229,12 +206,7 @@ async def search_perfumes_endpoint(
     query: str,
     limit: int = Query(default=50, ge=1, le=200, description="Maximum number of results")
 ):
-    """
-    Search perfumes by name or brand.
-    
-    - **query**: Search term (searches in name and brand)
-    - **limit**: Maximum number of results to return
-    """
+    """Search perfumes by name or brand."""
     try:
         perfumes = await search_perfumes(query, limit=limit)
         return perfumes
@@ -242,24 +214,14 @@ async def search_perfumes_endpoint(
         raise HTTPException(status_code=500, detail=f"Error searching perfumes: {str(e)}")
 
 
-# Protected endpoints (authentication required)
-@app.post("/perfumes", response_model=PerfumeResponse, tags=["Perfumes (Auth Required)"])
-async def create_perfume(
-    perfume: PerfumeCreate
-    
-):
-    """
-    Create a new perfume entry manually.
-    
-    **Requires authentication**: Include `Authorization: Bearer <token>` header.
-    """
+@app.post("/perfumes", response_model=PerfumeResponse, tags=["Perfumes"])
+async def create_perfume(perfume: PerfumeCreate):
+    """Create a new perfume entry manually."""
     try:
         perfume_dict = perfume.model_dump()
         result = await insert_perfume(perfume_dict)
-        
         if not result:
             raise HTTPException(status_code=500, detail="Failed to create perfume")
-        
         return result
     except HTTPException:
         raise
@@ -267,257 +229,80 @@ async def create_perfume(
         raise HTTPException(status_code=500, detail=f"Error creating perfume: {str(e)}")
 
 
-@app.post("/scrape", response_model=ScrapeResponse, tags=["Scraper (Auth Required)"])
-async def scrape_perfumes(
-    scrape_request: ScrapeRequest,
-    current_user: Dict[str, Any] = Depends(verify_admin)
-):
-    """
-    Trigger perfume scraping from Fragrantica.
-    
-    **Requires authentication**: Include `Authorization: Bearer <token>` header.
-    
-    - **limit**: Number of perfumes to scrape (default: 2, max: 1000)
-    
-    This endpoint will:
-    1. Scrape perfume data from Fragrantica
-    2. Save the data to data.json
-    3. Insert the data into Supabase database
-    
-    ⚠️ **Warning**: Scraping large numbers may take time. Start with small limits for testing.
-    """
+# Scraper endpoints (no authentication required)
+@app.post("/scrape", response_model=ScrapeResponse, tags=["Scraper"])
+async def scrape_perfumes(scrape_request: ScrapeRequest):
+    """Trigger perfume scraping from Fragrantica."""
     try:
         limit = scrape_request.limit
-        
-        print(f"🔍 Starting scrape for {limit} perfumes (requested by user {current_user.get('id', 'unknown')})")
-        
-        # Run the scraper in a thread to avoid blocking the event loop
+        print(f"🔍 Starting scrape for {limit} perfumes")
         perfumes = await asyncio.to_thread(scrape_fragrantica, limit=limit)
-        
         if not perfumes:
-            return {
-                "status": "warning",
-                "message": "No perfumes were scraped",
-                "scraped_count": 0,
-                "inserted_count": 0,
-                "perfumes": []
-            }
-        
-        # Insert into database
+            return {"status": "warning", "message": "No perfumes were scraped", "scraped_count": 0, "inserted_count": 0, "perfumes": []}
         inserted_count = await insert_perfumes_batch(perfumes)
-        
-        return {
-            "status": "success",
-            "message": f"Successfully scraped and stored perfumes",
-            "scraped_count": len(perfumes),
-            "inserted_count": inserted_count,
-            "perfumes": perfumes[:5]  # Return first 5 as preview
-        }
-        
+        return {"status": "success", "message": f"Successfully scraped and stored perfumes", "scraped_count": len(perfumes), "inserted_count": inserted_count, "perfumes": perfumes[:5]}
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error during scraping: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error during scraping: {str(e)}")
 
 
-@app.post("/scrape/brand", response_model=ScrapeResponse, tags=["Scraper (Auth Required)"])
-async def scrape_brand(
-    scrape_request: ScrapeBrandRequest,
-    current_user: Dict[str, Any] = Depends(verify_admin)
-):
-    """
-    Scrape perfumes from a specific brand on Fragrantica.
-    
-    **Requires authentication**: Include `Authorization: Bearer <token>` header.
-    
-    - **brand_name**: Name of the brand (e.g., "Jean Paul Gaultier", "Xerjoff", "Creed")
-    - **limit**: Number of perfumes to scrape from this brand (default: 10, max: 500)
-    
-    This endpoint will:
-    1. Scrape perfume data for the specified brand from Fragrantica
-    2. Save the data to data.json
-    3. Insert the data into Supabase database
-    
-    ⚠️ **Warning**: Scraping may take time depending on the limit. Start with small limits for testing.
-    """
+@app.post("/scrape/brand", response_model=ScrapeResponse, tags=["Scraper"])
+async def scrape_brand(scrape_request: ScrapeBrandRequest):
+    """Scrape perfumes from a specific brand on Fragrantica."""
     try:
         brand_name = scrape_request.brand_name
         limit = scrape_request.limit
-        
-        print(f"🔍 Starting brand scrape for '{brand_name}' with limit {limit} (requested by user {current_user.get('id', 'unknown')})")
-        
-        # Run the brand scraper in a thread to avoid blocking the event loop
+        print(f"🔍 Starting brand scrape for '{brand_name}' with limit {limit}")
         perfumes = await asyncio.to_thread(scrape_fragrantica_by_brand, brand_name, limit=limit)
-        
         if not perfumes:
-            return {
-                "status": "warning",
-                "message": f"No perfumes were scraped for brand '{brand_name}'",
-                "scraped_count": 0,
-                "inserted_count": 0,
-                "perfumes": []
-            }
-        
-        # Insert into database
+            return {"status": "warning", "message": f"No perfumes were scraped for brand '{brand_name}'", "scraped_count": 0, "inserted_count": 0, "perfumes": []}
         inserted_count = await insert_perfumes_batch(perfumes)
-        
-        return {
-            "status": "success",
-            "message": f"Successfully scraped {len(perfumes)} perfumes from '{brand_name}'",
-            "scraped_count": len(perfumes),
-            "inserted_count": inserted_count,
-            "perfumes": perfumes[:5]  # Return first 5 as preview
-        }
-        
+        return {"status": "success", "message": f"Successfully scraped {len(perfumes)} perfumes from '{brand_name}'", "scraped_count": len(perfumes), "inserted_count": inserted_count, "perfumes": perfumes[:5]}
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error during brand scraping: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error during brand scraping: {str(e)}")
 
 
-@app.post("/scrape/brands", response_model=ScrapeResponse, tags=["Scraper (Auth Required)"])
-async def scrape_multiple_brands(
-    scrape_request: ScrapeBrandsRequest,
-    current_user: Dict[str, Any] = Depends(verify_admin)
-):
-    """
-    Scrape perfumes from multiple brands on Fragrantica.
-    
-    **Requires authentication**: Include `Authorization: Bearer <token>` header.
-    
-    - **brands**: List of brand names (e.g., ["Jean Paul Gaultier", "Xerjoff", "Creed"])
-    - **limit_per_brand**: Number of perfumes to scrape per brand (default: 10, max: 200)
-    
-    This endpoint will:
-    1. Scrape perfume data for all specified brands from Fragrantica
-    2. Save the combined data to data.json
-    3. Insert all data into Supabase database
-    
-    ⚠️ **Warning**: Scraping multiple brands may take significant time. 
-    The total scraping time = (number of brands) × (limit per brand) × (time per perfume).
-    """
+@app.post("/scrape/brands", response_model=ScrapeResponse, tags=["Scraper"])
+async def scrape_multiple_brands(scrape_request: ScrapeBrandsRequest):
+    """Scrape perfumes from multiple brands on Fragrantica."""
     try:
         brands = scrape_request.brands
         limit_per_brand = scrape_request.limit_per_brand
-        
         if not brands:
-            return {
-                "status": "error",
-                "message": "No brands provided",
-                "scraped_count": 0,
-                "inserted_count": 0,
-                "perfumes": []
-            }
-        
-        print(f"🔍 Starting multi-brand scrape for {len(brands)} brands with {limit_per_brand} perfumes each (requested by user {current_user.get('id', 'unknown')})")
+            return {"status": "error", "message": "No brands provided", "scraped_count": 0, "inserted_count": 0, "perfumes": []}
+        print(f"🔍 Starting multi-brand scrape for {len(brands)} brands with {limit_per_brand} perfumes each")
         print(f"📋 Brands: {', '.join(brands)}")
-        
-        # Run the multi-brand scraper in a thread to avoid blocking the event loop
         perfumes = await asyncio.to_thread(scrape_fragrantica_brands, brands, limit_per_brand=limit_per_brand)
-        
         if not perfumes:
-            return {
-                "status": "warning",
-                "message": f"No perfumes were scraped from the specified brands",
-                "scraped_count": 0,
-                "inserted_count": 0,
-                "perfumes": []
-            }
-        
-        # Insert into database
+            return {"status": "warning", "message": "No perfumes were scraped from the specified brands", "scraped_count": 0, "inserted_count": 0, "perfumes": []}
         inserted_count = await insert_perfumes_batch(perfumes)
-        
-        return {
-            "status": "success",
-            "message": f"Successfully scraped {len(perfumes)} perfumes from {len(brands)} brands",
-            "scraped_count": len(perfumes),
-            "inserted_count": inserted_count,
-            "perfumes": perfumes[:5]  # Return first 5 as preview
-        }
-        
+        return {"status": "success", "message": f"Successfully scraped {len(perfumes)} perfumes from {len(brands)} brands", "scraped_count": len(perfumes), "inserted_count": inserted_count, "perfumes": perfumes[:5]}
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error during multi-brand scraping: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error during multi-brand scraping: {str(e)}")
 
 
-@app.post("/scrape/url", response_model=ScrapeResponse, tags=["Scraper (Auth Required)"])
-async def scrape_by_url(
-    scrape_request: ScrapeUrlRequest,
-    current_user: Dict[str, Any] = Depends(verify_admin)
-):
-    """
-    Scrape a specific perfume by its direct Fragrantica URL.
-    
-    **Requires authentication**: Include `Authorization: Bearer <token>` header.
-    
-    - **perfume_url**: Direct URL to a Fragrantica perfume page 
-      (e.g., "https://www.fragrantica.com/perfume/Xerjoff/White-On-White-Three-76333.html")
-    
-    This endpoint will:
-    1. Scrape perfume data from the specified URL
-    2. Save the data to data.json
-    3. Insert the data into Supabase database
-    
-    ⚠️ **Note**: This is the fastest scraping method as it only fetches one perfume page.
-    """
+@app.post("/scrape/url", response_model=ScrapeResponse, tags=["Scraper"])
+async def scrape_by_url(scrape_request: ScrapeUrlRequest):
+    """Scrape a specific perfume by its direct Fragrantica URL."""
     try:
         perfume_url = scrape_request.perfume_url
-        
-        # Validate URL
         if not perfume_url or 'fragrantica.com/perfume/' not in perfume_url:
-            return {
-                "status": "error",
-                "message": f"Invalid Fragrantica perfume URL: {perfume_url}",
-                "scraped_count": 0,
-                "inserted_count": 0,
-                "perfumes": []
-            }
-        
-        print(f"🔍 Starting URL scrape for '{perfume_url}' (requested by user {current_user.get('id', 'unknown')})")
-        
-        # Run the URL scraper in a thread to avoid blocking the event loop
+            return {"status": "error", "message": f"Invalid Fragrantica perfume URL: {perfume_url}", "scraped_count": 0, "inserted_count": 0, "perfumes": []}
+        print(f"🔍 Starting URL scrape for '{perfume_url}'")
         perfume = await asyncio.to_thread(scrape_fragrantica_by_url, perfume_url)
-        
         if not perfume:
-            return {
-                "status": "error",
-                "message": f"Failed to scrape perfume from URL: {perfume_url}",
-                "scraped_count": 0,
-                "inserted_count": 0,
-                "perfumes": []
-            }
-        
-        # Insert into database
+            return {"status": "error", "message": f"Failed to scrape perfume from URL: {perfume_url}", "scraped_count": 0, "inserted_count": 0, "perfumes": []}
         inserted_count = await insert_perfumes_batch([perfume])
-        
-        return {
-            "status": "success",
-            "message": f"Successfully scraped '{perfume.get('name', 'Unknown')}' by {perfume.get('brand', 'Unknown')}",
-            "scraped_count": 1,
-            "inserted_count": inserted_count,
-            "perfumes": [perfume]  # Return the scraped perfume
-        }
-        
+        return {"status": "success", "message": f"Successfully scraped '{perfume.get('name', 'Unknown')}' by {perfume.get('brand', 'Unknown')}", "scraped_count": 1, "inserted_count": inserted_count, "perfumes": [perfume]}
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error during URL scraping: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error during URL scraping: {str(e)}")
 
 
-# Statistics endpoint (public)
+# Statistics endpoint
 @app.get("/stats", tags=["Statistics"])
 async def get_stats():
-    """
-    Get database statistics.
-    """
+    """Get database statistics."""
     try:
         total_perfumes = await get_perfume_count()
-        
         return {
             "total_perfumes": total_perfumes,
             "database": "Supabase PostgreSQL",
@@ -527,36 +312,7 @@ async def get_stats():
         raise HTTPException(status_code=500, detail=f"Error fetching stats: {str(e)}")
 
 
-# Error handlers
-@app.exception_handler(404)
-async def not_found_handler(request, exc):
-    """Custom 404 handler"""
-    return {
-        "error": "Not Found",
-        "message": "The requested resource was not found",
-        "path": str(request.url)
-    }
-
-
-@app.exception_handler(500)
-async def internal_error_handler(request, exc):
-    """Custom 500 handler"""
-    return {
-        "error": "Internal Server Error",
-        "message": "An unexpected error occurred",
-        "path": str(request.url)
-    }
-
-
 if __name__ == "__main__":
     import uvicorn
-    
-    # Run the server
     port = int(os.getenv("PORT", 9000))
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=port,
-        reload=True
-    )
-
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
