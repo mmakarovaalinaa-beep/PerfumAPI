@@ -6,5 +6,5 @@ supabase==2.10.0
 python-dotenv==1.0.1
 pydantic==2.10.3
 lxml==5.3.0
-echo "anthropic" >> requirements.txt
+anthropic
 httpx
