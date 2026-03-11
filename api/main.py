@@ -344,15 +344,15 @@ async def sillage_fragrances(
     )
 
     if search:
-
-    q = q.or_(
-        f"name.ilike.%{search}%,"
-        f"brand.ilike.%{search}%,"
-        f"notes_top.ilike.%{search}%,"
-        f"notes_middle.ilike.%{search}%,"
-        f"notes_base.ilike.%{search}%,"
-        f"accords.ilike.%{search}%"
-    )
+        # Search across name, brand, notes, and accords
+        q = q.or_(
+            f"name.ilike.%{search}%,"
+            f"brand.ilike.%{search}%,"
+            f"notes_top.ilike.%{search}%,"
+            f"notes_middle.ilike.%{search}%,"
+            f"notes_base.ilike.%{search}%,"
+            f"accords.ilike.%{search}%"
+        )
     if gender:
         q = q.eq("gender", gender.lower())
     if brand:
