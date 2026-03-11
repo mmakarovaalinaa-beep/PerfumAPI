@@ -492,7 +492,56 @@ async def fragella_similar(
     if r.status_code != 200:
         raise HTTPException(status_code=r.status_code, detail=r.text)
     return r.json()
+import anthropic
 
+@app.get("/sillage/fragrances/enrich", tags=["Sillage DB"])
+async def enrich_unknown_fragrance(name: str = Query(..., description="Fragrance name to look up")):
+    """
+    When a fragrance isn't found in the DB, call Claude to generate
+    structured data matching the existing fragrance schema.
+    """
+    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+    prompt = f"""You are a fragrance expert. Return ONLY a JSON object for the perfume "{name}".
+Use exactly this schema, no extra text:
+{{
+  "id": "ai-{name.lower().replace(' ', '-')}",
+  "name": "...",
+  "brand": "...",
+  "year": "YYYY",
+  "gender": "men|women|unisex",
+  "rating": 0.0,
+  "longevity": "Moderate|Long-lasting|Very Long-lasting|Weak",
+  "sillage": "Low|Moderate|Strong|Heavy",
+  "oil_type": "Eau de Parfum|Eau de Toilette|Extrait de Parfum",
+  "country": "...",
+  "popularity": "Low|Moderate|High|Very High",
+  "accords": ["accord1", "accord2"],
+  "accord_pct": {{"accord1": "Dominant", "accord2": "Prominent"}},
+  "notes_top": ["note1"],
+  "notes_middle": ["note1"],
+  "notes_base": ["note1"],
+  "seasons": [],
+  "image_url": null,
+  "purchase_url": null,
+  "price": null
+}}"""
+
+    message = client.messages.create(
+        model="claude-opus-4-6",
+        max_tokens=1024,
+        messages=[{"role": "user", "content": prompt}]
+    )
+
+    import json
+    raw = message.content[0].text.strip()
+    # Strip markdown fences if present
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+    data = json.loads(raw.strip())
+    return {"source": "ai", "fragrance": data}
 
 if __name__ == "__main__":
     import uvicorn
