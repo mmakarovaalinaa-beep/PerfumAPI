@@ -552,7 +552,7 @@ async def scrape_unknown_fragrance(name: str = Query(..., description="Fragrance
 
     # Step 1: Search DuckDuckGo for the Fragrantica URL
     search_query = f"{name} site:fragrantica.com/perfume"
-search_url = f"https://html.duckduckgo.com/html/?q={_quote(search_query)}"
+    search_url = f"https://html.duckduckgo.com/html/?q={_quote(search_query)}"
 
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'}
