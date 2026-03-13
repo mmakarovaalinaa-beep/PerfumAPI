@@ -385,23 +385,27 @@ Use exactly this schema, no extra text:
 async def scrape_unknown_fragrance(name: str = Query(..., description="Fragrance name to search and scrape")):
     """Search Fragrantica via DuckDuckGo, scrape real data, save to Supabase."""
 
-    # Step 1: Search DuckDuckGo for the Fragrantica URL
-    search_query = f"{name} site:fragrantica.com/perfume"
-    search_url = f"https://html.duckduckgo.com/html/?q={_quote(search_query)}"
+    # Step 1: Search Fragrantica directly
+    search_url = f"https://www.fragrantica.com/search/?query={_quote(name)}"
 
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'}
-        resp = _requests.get(search_url, headers=headers, timeout=10)
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Referer': 'https://www.fragrantica.com/',
+        }
+        resp = _requests.get(search_url, headers=headers, timeout=15)
         soup = BeautifulSoup(resp.text, 'html.parser')
 
         fragrantica_url = None
         for a in soup.find_all('a', href=True):
             href = a['href']
-            if 'fragrantica.com/perfume/' in href and '.html' in href:
-                match = re.search(r'(https://www\.fragrantica\.com/perfume/[^\s&"]+\.html)', href)
-                if match:
-                    fragrantica_url = match.group(1)
-                    break
+            if '/perfume/' in href and '.html' in href:
+                if not href.startswith('http'):
+                    href = 'https://www.fragrantica.com' + href
+                fragrantica_url = href
+                break
 
         if not fragrantica_url:
             raise HTTPException(status_code=404, detail=f"Could not find '{name}' on Fragrantica")
