@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 import os
 import sys
 import asyncio
-
+from urllib.parse import quote as _quote
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -552,7 +552,6 @@ async def scrape_unknown_fragrance(name: str = Query(..., description="Fragrance
 
     # Step 1: Search DuckDuckGo for the Fragrantica URL
     search_query = f"{name} site:fragrantica.com/perfume"
-    from urllib.parse import quote as _quote
 search_url = f"https://html.duckduckgo.com/html/?q={_quote(search_query)}"
 
     try:
