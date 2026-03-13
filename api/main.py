@@ -556,7 +556,7 @@ async def scrape_unknown_fragrance(name: str = Query(..., description="Fragrance
 
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'}
-        resp = requests.get(search_url, headers=headers, timeout=10)
+        import requests as _requests         resp = _requests.get(search_url, headers=headers, timeout=10)
         soup = BeautifulSoup(resp.text, 'html.parser')
 
         # Extract first Fragrantica perfume URL from results
