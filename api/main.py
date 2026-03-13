@@ -8,10 +8,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from dotenv import load_dotenv
+from urllib.parse import quote as _quote
+from bs4 import BeautifulSoup
+import requests as _requests
 import os
 import sys
 import asyncio
-from urllib.parse import quote as _quote
+import re
+import json as _json
+import uuid
+import httpx
+import anthropic
+
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -229,13 +237,12 @@ async def create_perfume(perfume: PerfumeCreate):
         raise HTTPException(status_code=500, detail=f"Error creating perfume: {str(e)}")
 
 
-# Scraper endpoints (no authentication required)
+# Scraper endpoints
 @app.post("/scrape", response_model=ScrapeResponse, tags=["Scraper"])
 async def scrape_perfumes(scrape_request: ScrapeRequest):
     """Trigger perfume scraping from Fragrantica."""
     try:
         limit = scrape_request.limit
-        print(f"🔍 Starting scrape for {limit} perfumes")
         perfumes = await asyncio.to_thread(scrape_fragrantica, limit=limit)
         if not perfumes:
             return {"status": "warning", "message": "No perfumes were scraped", "scraped_count": 0, "inserted_count": 0, "perfumes": []}
@@ -251,7 +258,6 @@ async def scrape_brand(scrape_request: ScrapeBrandRequest):
     try:
         brand_name = scrape_request.brand_name
         limit = scrape_request.limit
-        print(f"🔍 Starting brand scrape for '{brand_name}' with limit {limit}")
         perfumes = await asyncio.to_thread(scrape_fragrantica_by_brand, brand_name, limit=limit)
         if not perfumes:
             return {"status": "warning", "message": f"No perfumes were scraped for brand '{brand_name}'", "scraped_count": 0, "inserted_count": 0, "perfumes": []}
@@ -269,8 +275,6 @@ async def scrape_multiple_brands(scrape_request: ScrapeBrandsRequest):
         limit_per_brand = scrape_request.limit_per_brand
         if not brands:
             return {"status": "error", "message": "No brands provided", "scraped_count": 0, "inserted_count": 0, "perfumes": []}
-        print(f"🔍 Starting multi-brand scrape for {len(brands)} brands with {limit_per_brand} perfumes each")
-        print(f"📋 Brands: {', '.join(brands)}")
         perfumes = await asyncio.to_thread(scrape_fragrantica_brands, brands, limit_per_brand=limit_per_brand)
         if not perfumes:
             return {"status": "warning", "message": "No perfumes were scraped from the specified brands", "scraped_count": 0, "inserted_count": 0, "perfumes": []}
@@ -287,7 +291,6 @@ async def scrape_by_url(scrape_request: ScrapeUrlRequest):
         perfume_url = scrape_request.perfume_url
         if not perfume_url or 'fragrantica.com/perfume/' not in perfume_url:
             return {"status": "error", "message": f"Invalid Fragrantica perfume URL: {perfume_url}", "scraped_count": 0, "inserted_count": 0, "perfumes": []}
-        print(f"🔍 Starting URL scrape for '{perfume_url}'")
         perfume = await asyncio.to_thread(scrape_fragrantica_by_url, perfume_url)
         if not perfume:
             return {"status": "error", "message": f"Failed to scrape perfume from URL: {perfume_url}", "scraped_count": 0, "inserted_count": 0, "perfumes": []}
@@ -312,12 +315,10 @@ async def get_stats():
         raise HTTPException(status_code=500, detail=f"Error fetching stats: {str(e)}")
 
 
-
 # ── SUPABASE-BACKED FRAGRANCE ENDPOINTS ──────────────────────────────────────
-# These replace the Fragella proxy for browsing — reads from your local DB,
-# zero Fragella quota usage. Run import_fragella.py once to populate.
 
 from supabase import create_client as _create_sb_client
+
 
 def _get_sb():
     url = os.getenv("SUPABASE_URL", "")
@@ -327,179 +328,17 @@ def _get_sb():
     return _create_sb_client(url, key)
 
 
-@app.get("/sillage/fragrances", tags=["Sillage DB"])
-async def sillage_fragrances(
-    search: Optional[str] = Query(None, description="Search name or brand"),
-    gender: Optional[str] = Query(None, description="men | women | unisex"),
-    brand:  Optional[str] = Query(None, description="Exact brand name"),
-    limit:  int           = Query(48, ge=1, le=500),
-    offset: int           = Query(0, ge=0),
-):
-    """Browse fragrances from Supabase — fast, no quota."""
-    sb = _get_sb()
-    q  = sb.table("fragrances").select(
-        "id,name,brand,year,gender,rating,longevity,sillage,oil_type,"
-        "image_url,purchase_url,accords,accord_pct,notes_top,notes_middle,"
-        "notes_base,popularity,country,price,seasons"
-    )
-
-    if search:
-        # Use RPC function to search across JSONB columns (notes, accords) via cast to text
-        rpc_result = sb.rpc("search_fragrances", {"search_term": search}).execute()
-        rows = rpc_result.data or []
-
-        # Apply gender/brand filters in Python since we are post-RPC
-        if gender:
-            rows = [r for r in rows if (r.get("gender") or "").lower() == gender.lower()]
-        if brand:
-            rows = [r for r in rows if brand.lower() in (r.get("brand") or "").lower()]
-
-        # Sort by rating descending and apply pagination
-        rows.sort(key=lambda r: r.get("rating") or 0, reverse=True)
-        rows = rows[offset: offset + limit]
-    else:
-        if gender:
-            q = q.eq("gender", gender.lower())
-        if brand:
-            q = q.ilike("brand", f"%{brand}%")
-
-        q = q.order("rating", desc=True, nullsfirst=False)
-        q = q.range(offset, offset + limit - 1)
-
-        result = q.execute()
-        rows   = result.data or []
-
-    # Parse JSON strings back to lists/dicts
-    import json as _json
-    for row in rows:
-        for field in ("accords","accord_pct","notes_top","notes_middle","notes_base","seasons"):
-            if isinstance(row.get(field), str):
-                try: row[field] = _json.loads(row[field])
-                except: row[field] = []
-
-    return {"total": len(rows), "offset": offset, "limit": limit, "fragrances": rows}
-
-
 @app.get("/sillage/fragrances/count", tags=["Sillage DB"])
 async def sillage_count():
     """Total fragrances in Supabase."""
     sb = _get_sb()
-    r  = sb.table("fragrances").select("id", count="exact").execute()
+    r = sb.table("fragrances").select("id", count="exact").execute()
     return {"count": r.count}
 
 
-@app.get("/sillage/brands", tags=["Sillage DB"])
-async def sillage_brands():
-    """All distinct brands in Supabase."""
-    sb = _get_sb()
-    r  = sb.table("fragrances").select("brand").execute()
-    brands = sorted(set(row["brand"] for row in (r.data or []) if row.get("brand")))
-    return {"brands": brands, "count": len(brands)}
-
-
-@app.post("/admin/import", tags=["Admin"])
-async def trigger_import(background_tasks: __import__('fastapi').BackgroundTasks):
-    """Trigger a background re-import from Fragella into Supabase.
-    Only call this when you want to refresh the database."""
-    import subprocess, sys
-    def run():
-        subprocess.run([sys.executable, "import_fragella.py"], check=False)
-    background_tasks.add_task(run)
-    return {"status": "Import started in background — check Railway logs for progress"}
-
-
-# ── FRAGELLA PROXY (kept for one-time imports / admin use) ─────────────────
-# Forwards requests to Fragella API server-side (avoids browser CORS restrictions)
-
-import httpx
-
-FRAGELLA_BASE = "https://api.fragella.com/api/v1"
-FRAGELLA_KEY  = os.getenv("FRAGELLA_KEY", "")
-
-
-@app.get("/fragella/fragrances", tags=["Fragella Proxy"])
-async def fragella_fragrances(
-    search: Optional[str] = Query(None),
-    gender: Optional[str] = Query(None),
-    limit:  int           = Query(50, ge=1, le=500),
-):
-    """Proxy: GET /api/v1/fragrances from Fragella."""
-    params = {"limit": limit}
-    if search: params["search"] = search
-    if gender: params["gender"] = gender
-    async with httpx.AsyncClient(timeout=20) as client:
-        r = await client.get(
-            f"{FRAGELLA_BASE}/fragrances",
-            params=params,
-            headers={"x-api-key": FRAGELLA_KEY},
-        )
-    if r.status_code != 200:
-        raise HTTPException(status_code=r.status_code, detail=r.text)
-    return r.json()
-
-
-
-@app.get("/fragella/brands/{brand_name}", tags=["Fragella Proxy"])
-async def fragella_brand(
-    brand_name: str,
-    limit: int = Query(500, ge=1, le=500),
-):
-    """Proxy: GET /api/v1/brands/{brandName} — all fragrances for a house."""
-    async with httpx.AsyncClient(timeout=30) as client:
-        r = await client.get(
-            f"{FRAGELLA_BASE}/brands/{brand_name}",
-            params={"limit": limit},
-            headers={"x-api-key": FRAGELLA_KEY},
-        )
-    if r.status_code != 200:
-        raise HTTPException(status_code=r.status_code, detail=r.text)
-    return r.json()
-
-
-@app.get("/fragella/fragrances/match", tags=["Fragella Proxy"])
-async def fragella_match(
-    accords: Optional[str] = Query(None),
-    top:     Optional[str] = Query(None),
-    limit:   int           = Query(20, ge=1, le=100),
-):
-    """Proxy: GET /api/v1/fragrances/match from Fragella."""
-    params = {"limit": limit}
-    if accords: params["accords"] = accords
-    if top:     params["top"] = top
-    async with httpx.AsyncClient(timeout=20) as client:
-        r = await client.get(
-            f"{FRAGELLA_BASE}/fragrances/match",
-            params=params,
-            headers={"x-api-key": FRAGELLA_KEY},
-        )
-    if r.status_code != 200:
-        raise HTTPException(status_code=r.status_code, detail=r.text)
-    return r.json()
-
-
-@app.get("/fragella/fragrances/similar", tags=["Fragella Proxy"])
-async def fragella_similar(
-    name:  str = Query(...),
-    limit: int = Query(6, ge=1, le=50),
-):
-    """Proxy: GET /api/v1/fragrances/similar from Fragella."""
-    async with httpx.AsyncClient(timeout=20) as client:
-        r = await client.get(
-            f"{FRAGELLA_BASE}/fragrances/similar",
-            params={"name": name, "limit": limit},
-            headers={"x-api-key": FRAGELLA_KEY},
-        )
-    if r.status_code != 200:
-        raise HTTPException(status_code=r.status_code, detail=r.text)
-    return r.json()
-import anthropic
-
 @app.get("/sillage/fragrances/enrich", tags=["Sillage DB"])
 async def enrich_unknown_fragrance(name: str = Query(..., description="Fragrance name to look up")):
-    """
-    When a fragrance isn't found in the DB, call Claude to generate
-    structured data matching the existing fragrance schema.
-    """
+    """Call Claude to generate structured fragrance data."""
     client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
     prompt = f"""You are a fragrance expert. Return ONLY a JSON object for the perfume "{name}".
@@ -528,27 +367,23 @@ Use exactly this schema, no extra text:
 }}"""
 
     message = client.messages.create(
-        model="claude-opus-4-6",
+        model="claude-sonnet-4-6",
         max_tokens=1024,
         messages=[{"role": "user", "content": prompt}]
     )
 
-    import json
     raw = message.content[0].text.strip()
-    # Strip markdown fences if present
     if raw.startswith("```"):
         raw = raw.split("```")[1]
         if raw.startswith("json"):
             raw = raw[4:]
-    data = json.loads(raw.strip())
+    data = _json.loads(raw.strip())
     return {"source": "ai", "fragrance": data}
+
+
 @app.get("/sillage/fragrances/scrape-unknown", tags=["Sillage DB"])
 async def scrape_unknown_fragrance(name: str = Query(..., description="Fragrance name to search and scrape")):
-    """
-    When a fragrance isn't in the DB, search Fragrantica via DuckDuckGo,
-    scrape the real data, save to Supabase, and return it.
-    """
-    import json as _json
+    """Search Fragrantica via DuckDuckGo, scrape real data, save to Supabase."""
 
     # Step 1: Search DuckDuckGo for the Fragrantica URL
     search_query = f"{name} site:fragrantica.com/perfume"
@@ -556,15 +391,13 @@ async def scrape_unknown_fragrance(name: str = Query(..., description="Fragrance
 
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'}
-        import requests as _requests         resp = _requests.get(search_url, headers=headers, timeout=10)
+        resp = _requests.get(search_url, headers=headers, timeout=10)
         soup = BeautifulSoup(resp.text, 'html.parser')
 
-        # Extract first Fragrantica perfume URL from results
         fragrantica_url = None
         for a in soup.find_all('a', href=True):
             href = a['href']
             if 'fragrantica.com/perfume/' in href and '.html' in href:
-                # DuckDuckGo wraps URLs, extract the real one
                 match = re.search(r'(https://www\.fragrantica\.com/perfume/[^\s&"]+\.html)', href)
                 if match:
                     fragrantica_url = match.group(1)
@@ -590,8 +423,7 @@ async def scrape_unknown_fragrance(name: str = Query(..., description="Fragrance
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Scrape failed: {str(e)}")
 
-    # Step 3: Normalise to your fragrances schema
-    import uuid
+    # Step 3: Normalise to fragrances schema
     fragrance = {
         "id": str(uuid.uuid4()),
         "name": raw.get("name"),
@@ -617,7 +449,7 @@ async def scrape_unknown_fragrance(name: str = Query(..., description="Fragrance
         "source": "fragrantica"
     }
 
-    # Step 4: Save to Supabase so it's cached for next time
+    # Step 4: Save to Supabase
     try:
         sb = _get_sb()
         sb.table("fragrances").insert(fragrance).execute()
@@ -625,7 +457,137 @@ async def scrape_unknown_fragrance(name: str = Query(..., description="Fragrance
     except Exception as e:
         print(f"⚠️  Could not save to Supabase: {e}")
 
-    return {"source": "fragrantica", "fragrance": fragrance}    
+    return {"source": "fragrantica", "fragrance": fragrance}
+
+
+@app.get("/sillage/fragrances", tags=["Sillage DB"])
+async def sillage_fragrances(
+    search: Optional[str] = Query(None, description="Search name or brand"),
+    gender: Optional[str] = Query(None, description="men | women | unisex"),
+    brand: Optional[str] = Query(None, description="Exact brand name"),
+    limit: int = Query(48, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+):
+    """Browse fragrances from Supabase — fast, no quota."""
+    sb = _get_sb()
+    q = sb.table("fragrances").select(
+        "id,name,brand,year,gender,rating,longevity,sillage,oil_type,"
+        "image_url,purchase_url,accords,accord_pct,notes_top,notes_middle,"
+        "notes_base,popularity,country,price,seasons"
+    )
+
+    if search:
+        rpc_result = sb.rpc("search_fragrances", {"search_term": search}).execute()
+        rows = rpc_result.data or []
+
+        if gender:
+            rows = [r for r in rows if (r.get("gender") or "").lower() == gender.lower()]
+        if brand:
+            rows = [r for r in rows if brand.lower() in (r.get("brand") or "").lower()]
+
+        rows.sort(key=lambda r: r.get("rating") or 0, reverse=True)
+        rows = rows[offset: offset + limit]
+    else:
+        if gender:
+            q = q.eq("gender", gender.lower())
+        if brand:
+            q = q.ilike("brand", f"%{brand}%")
+
+        q = q.order("rating", desc=True, nullsfirst=False)
+        q = q.range(offset, offset + limit - 1)
+
+        result = q.execute()
+        rows = result.data or []
+
+    for row in rows:
+        for field in ("accords", "accord_pct", "notes_top", "notes_middle", "notes_base", "seasons"):
+            if isinstance(row.get(field), str):
+                try:
+                    row[field] = _json.loads(row[field])
+                except:
+                    row[field] = []
+
+    return {"total": len(rows), "offset": offset, "limit": limit, "fragrances": rows}
+
+
+@app.get("/sillage/brands", tags=["Sillage DB"])
+async def sillage_brands():
+    """All distinct brands in Supabase."""
+    sb = _get_sb()
+    r = sb.table("fragrances").select("brand").execute()
+    brands = sorted(set(row["brand"] for row in (r.data or []) if row.get("brand")))
+    return {"brands": brands, "count": len(brands)}
+
+
+@app.post("/admin/import", tags=["Admin"])
+async def trigger_import(background_tasks: __import__('fastapi').BackgroundTasks):
+    """Trigger a background re-import from Fragella into Supabase."""
+    import subprocess
+    def run():
+        subprocess.run([sys.executable, "import_fragella.py"], check=False)
+    background_tasks.add_task(run)
+    return {"status": "Import started in background — check Railway logs for progress"}
+
+
+# ── FRAGELLA PROXY ─────────────────────────────────────────────────────────────
+
+FRAGELLA_BASE = "https://api.fragella.com/api/v1"
+FRAGELLA_KEY = os.getenv("FRAGELLA_KEY", "")
+
+
+@app.get("/fragella/fragrances", tags=["Fragella Proxy"])
+async def fragella_fragrances(
+    search: Optional[str] = Query(None),
+    gender: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=500),
+):
+    """Proxy: GET /api/v1/fragrances from Fragella."""
+    params = {"limit": limit}
+    if search: params["search"] = search
+    if gender: params["gender"] = gender
+    async with httpx.AsyncClient(timeout=20) as client:
+        r = await client.get(f"{FRAGELLA_BASE}/fragrances", params=params, headers={"x-api-key": FRAGELLA_KEY})
+    if r.status_code != 200:
+        raise HTTPException(status_code=r.status_code, detail=r.text)
+    return r.json()
+
+
+@app.get("/fragella/brands/{brand_name}", tags=["Fragella Proxy"])
+async def fragella_brand(brand_name: str, limit: int = Query(500, ge=1, le=500)):
+    """Proxy: GET /api/v1/brands/{brandName}"""
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.get(f"{FRAGELLA_BASE}/brands/{brand_name}", params={"limit": limit}, headers={"x-api-key": FRAGELLA_KEY})
+    if r.status_code != 200:
+        raise HTTPException(status_code=r.status_code, detail=r.text)
+    return r.json()
+
+
+@app.get("/fragella/fragrances/match", tags=["Fragella Proxy"])
+async def fragella_match(
+    accords: Optional[str] = Query(None),
+    top: Optional[str] = Query(None),
+    limit: int = Query(20, ge=1, le=100),
+):
+    """Proxy: GET /api/v1/fragrances/match from Fragella."""
+    params = {"limit": limit}
+    if accords: params["accords"] = accords
+    if top: params["top"] = top
+    async with httpx.AsyncClient(timeout=20) as client:
+        r = await client.get(f"{FRAGELLA_BASE}/fragrances/match", params=params, headers={"x-api-key": FRAGELLA_KEY})
+    if r.status_code != 200:
+        raise HTTPException(status_code=r.status_code, detail=r.text)
+    return r.json()
+
+
+@app.get("/fragella/fragrances/similar", tags=["Fragella Proxy"])
+async def fragella_similar(name: str = Query(...), limit: int = Query(6, ge=1, le=50)):
+    """Proxy: GET /api/v1/fragrances/similar from Fragella."""
+    async with httpx.AsyncClient(timeout=20) as client:
+        r = await client.get(f"{FRAGELLA_BASE}/fragrances/similar", params={"name": name, "limit": limit}, headers={"x-api-key": FRAGELLA_KEY})
+    if r.status_code != 200:
+        raise HTTPException(status_code=r.status_code, detail=r.text)
+    return r.json()
+
 
 if __name__ == "__main__":
     import uvicorn
