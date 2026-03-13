@@ -382,86 +382,48 @@ Use exactly this schema, no extra text:
 
 
 @app.get("/sillage/fragrances/scrape-unknown", tags=["Sillage DB"])
-async def scrape_unknown_fragrance(name: str = Query(..., description="Fragrance name to search and scrape")):
-    """Search Fragrantica via DuckDuckGo, scrape real data, save to Supabase."""
+async def scrape_unknown_fragrance(name: str = Query(..., description="Fragrance name to look up")):
+    """Call Claude to generate structured fragrance data when not found in DB."""
+    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
-    # Step 1: Search Fragrantica directly
-    search_url = f"https://www.fragrantica.com/search/?query={_quote(name)}"
+    prompt = f"""You are a fragrance expert. Return ONLY a JSON object for the perfume "{name}".
+Use exactly this schema, no extra text:
+{{
+  "id": "ai-{name.lower().replace(' ', '-')}",
+  "name": "...",
+  "brand": "...",
+  "year": "YYYY",
+  "gender": "men|women|unisex",
+  "rating": 0.0,
+  "longevity": "Moderate|Long-lasting|Very Long-lasting|Weak",
+  "sillage": "Low|Moderate|Strong|Heavy",
+  "oil_type": "Eau de Parfum|Eau de Toilette|Extrait de Parfum",
+  "country": "...",
+  "popularity": "Low|Moderate|High|Very High",
+  "accords": ["accord1", "accord2"],
+  "accord_pct": {{"accord1": "Dominant", "accord2": "Prominent"}},
+  "notes_top": ["note1"],
+  "notes_middle": ["note1"],
+  "notes_base": ["note1"],
+  "seasons": [],
+  "image_url": null,
+  "purchase_url": null,
+  "price": null
+}}"""
 
-    try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Referer': 'https://www.fragrantica.com/',
-        }
-        resp = _requests.get(search_url, headers=headers, timeout=15)
-        soup = BeautifulSoup(resp.text, 'html.parser')
+    message = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=1024,
+        messages=[{"role": "user", "content": prompt}]
+    )
 
-        fragrantica_url = None
-        for a in soup.find_all('a', href=True):
-            href = a['href']
-            if '/perfume/' in href and '.html' in href:
-                if not href.startswith('http'):
-                    href = 'https://www.fragrantica.com' + href
-                fragrantica_url = href
-                break
-
-        if not fragrantica_url:
-            raise HTTPException(status_code=404, detail=f"Could not find '{name}' on Fragrantica")
-
-        print(f"✅ Found Fragrantica URL: {fragrantica_url}")
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
-
-    # Step 2: Scrape the Fragrantica page
-    try:
-        raw = await asyncio.to_thread(scrape_fragrantica_by_url, fragrantica_url)
-        if not raw:
-            raise HTTPException(status_code=404, detail=f"Failed to scrape '{name}' from Fragrantica")
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Scrape failed: {str(e)}")
-
-    # Step 3: Normalise to fragrances schema
-    fragrance = {
-        "id": str(uuid.uuid4()),
-        "name": raw.get("name"),
-        "brand": raw.get("brand"),
-        "year": str(raw.get("release_year")) if raw.get("release_year") else None,
-        "gender": (raw.get("gender") or "").lower(),
-        "rating": raw.get("rating"),
-        "longevity": raw.get("longevity"),
-        "sillage": raw.get("sillage"),
-        "oil_type": None,
-        "country": None,
-        "popularity": None,
-        "accords": [],
-        "accord_pct": {},
-        "notes_top": raw.get("notes_top", []),
-        "notes_middle": raw.get("notes_middle", []),
-        "notes_base": raw.get("notes_base", []),
-        "notes_all": [],
-        "seasons": [],
-        "image_url": raw.get("image_url"),
-        "purchase_url": raw.get("perfume_url"),
-        "price": None,
-        "source": "fragrantica"
-    }
-
-    # Step 4: Save to Supabase
-    try:
-        sb = _get_sb()
-        sb.table("fragrances").insert(fragrance).execute()
-        print(f"✅ Saved '{fragrance['name']}' to Supabase")
-    except Exception as e:
-        print(f"⚠️  Could not save to Supabase: {e}")
-
-    return {"source": "fragrantica", "fragrance": fragrance}
+    raw = message.content[0].text.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+    data = _json.loads(raw.strip())
+    return {"source": "ai", "fragrance": data}
 
 
 @app.get("/sillage/fragrances", tags=["Sillage DB"])
