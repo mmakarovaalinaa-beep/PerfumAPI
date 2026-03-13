@@ -542,7 +542,90 @@ Use exactly this schema, no extra text:
             raw = raw[4:]
     data = json.loads(raw.strip())
     return {"source": "ai", "fragrance": data}
-    
+@app.get("/sillage/fragrances/scrape-unknown", tags=["Sillage DB"])
+async def scrape_unknown_fragrance(name: str = Query(..., description="Fragrance name to search and scrape")):
+    """
+    When a fragrance isn't in the DB, search Fragrantica via DuckDuckGo,
+    scrape the real data, save to Supabase, and return it.
+    """
+    import json as _json
+
+    # Step 1: Search DuckDuckGo for the Fragrantica URL
+    search_query = f"{name} site:fragrantica.com/perfume"
+    search_url = f"https://html.duckduckgo.com/html/?q={requests.utils.quote(search_query)}"
+
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'}
+        resp = requests.get(search_url, headers=headers, timeout=10)
+        soup = BeautifulSoup(resp.text, 'html.parser')
+
+        # Extract first Fragrantica perfume URL from results
+        fragrantica_url = None
+        for a in soup.find_all('a', href=True):
+            href = a['href']
+            if 'fragrantica.com/perfume/' in href and '.html' in href:
+                # DuckDuckGo wraps URLs, extract the real one
+                match = re.search(r'(https://www\.fragrantica\.com/perfume/[^\s&"]+\.html)', href)
+                if match:
+                    fragrantica_url = match.group(1)
+                    break
+
+        if not fragrantica_url:
+            raise HTTPException(status_code=404, detail=f"Could not find '{name}' on Fragrantica")
+
+        print(f"✅ Found Fragrantica URL: {fragrantica_url}")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+
+    # Step 2: Scrape the Fragrantica page
+    try:
+        raw = await asyncio.to_thread(scrape_fragrantica_by_url, fragrantica_url)
+        if not raw:
+            raise HTTPException(status_code=404, detail=f"Failed to scrape '{name}' from Fragrantica")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Scrape failed: {str(e)}")
+
+    # Step 3: Normalise to your fragrances schema
+    import uuid
+    fragrance = {
+        "id": str(uuid.uuid4()),
+        "name": raw.get("name"),
+        "brand": raw.get("brand"),
+        "year": str(raw.get("release_year")) if raw.get("release_year") else None,
+        "gender": (raw.get("gender") or "").lower(),
+        "rating": raw.get("rating"),
+        "longevity": raw.get("longevity"),
+        "sillage": raw.get("sillage"),
+        "oil_type": None,
+        "country": None,
+        "popularity": None,
+        "accords": [],
+        "accord_pct": {},
+        "notes_top": raw.get("notes_top", []),
+        "notes_middle": raw.get("notes_middle", []),
+        "notes_base": raw.get("notes_base", []),
+        "notes_all": [],
+        "seasons": [],
+        "image_url": raw.get("image_url"),
+        "purchase_url": raw.get("perfume_url"),
+        "price": None,
+        "source": "fragrantica"
+    }
+
+    # Step 4: Save to Supabase so it's cached for next time
+    try:
+        sb = _get_sb()
+        sb.table("fragrances").insert(fragrance).execute()
+        print(f"✅ Saved '{fragrance['name']}' to Supabase")
+    except Exception as e:
+        print(f"⚠️  Could not save to Supabase: {e}")
+
+    return {"source": "fragrantica", "fragrance": fragrance}    
 
 if __name__ == "__main__":
     import uvicorn
